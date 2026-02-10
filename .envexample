@@ -1,7 +1,9 @@
-=======
 SUPABASE_URL=
 SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_KEY=
+
+# Gemini API Key (used in Frontend)
+GEMINI_API_KEY=
 
 # ElevenLabs Text-to-Speech Configuration
 ELEVENLABS_API_KEY=
