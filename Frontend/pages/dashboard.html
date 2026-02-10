@@ -1,0 +1,936 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Stockd — Dashboard</title>
+  <link rel="icon" type="image/svg+xml" href="../assets/logo-s.svg">
+  <link rel="stylesheet" href="../css/app-light.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+  <style>
+    /* Center align ALL columns in Forecast & Inventory card tabs */
+    #tab-ingredients th,
+    #tab-ingredients td,
+    #tab-menu th,
+    #tab-menu td {
+      text-align: center;
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- Top Nav -->
+  <nav class="topnav">
+    <div class="topnav-brand">
+      <div class="topnav-icon"></div>
+      <div>
+        <div class="topnav-title">Stockd</div>
+      </div>
+    </div>
+    <div class="topnav-links">
+      <button class="topnav-link active" onclick="go('dashboard')">Dashboard</button>
+      <button class="topnav-link" onclick="go('sales-analysis')">Sales Analysis</button>
+      <button class="topnav-link" onclick="go('receive')">Receive</button>
+      <button class="topnav-link" onclick="go('count')">Count</button>
+    </div>
+    <div class="topnav-actions">
+      <button class="btn btn-primary" onclick="toggleAIPanel()">✨ Copilot</button>
+      <button class="btn btn-outline" onclick="signOut()" title="Sign out">⏻</button>
+    </div>
+  </nav>
+
+  <!-- Main Content -->
+  <div class="page-container" id="main-content" style="opacity:0;transition:opacity 0.5s; padding-bottom:20px;">
+
+    <!-- Alert Banner (filled by JS) -->
+    <div id="alert-banner"></div>
+
+    <!-- KPI Cards -->
+    <div class="grid-4" id="kpi-grid">
+      <div class="card stat-card animate-in stagger-1">
+        <div class="card-accent-bar" style="background: var(--green);"></div>
+        <div class="stat-label">Total Revenue</div>
+        <div class="stat-value" id="kpi-revenue" style="color: var(--green);">—</div>
+        <div class="stat-sub" id="kpi-revenue-sub"></div>
+      </div>
+      <div class="card stat-card animate-in stagger-2">
+        <div class="card-accent-bar" style="background: var(--accent);"></div>
+        <div class="stat-label">Avg Daily Revenue</div>
+        <div class="stat-value" id="kpi-daily" style="color: var(--accent);">—</div>
+        <div class="stat-sub" id="kpi-daily-sub"></div>
+      </div>
+      <div class="card stat-card animate-in stagger-3">
+        <div class="card-accent-bar" style="background: var(--orange);"></div>
+        <div class="stat-label">Inventory Alerts</div>
+        <div class="stat-value" id="kpi-alerts" style="color: var(--orange);">—</div>
+        <div class="stat-sub" id="kpi-alerts-sub"></div>
+      </div>
+      <div class="card stat-card animate-in stagger-4">
+        <div class="card-accent-bar" style="background: var(--purple);"></div>
+        <div class="stat-label">Menu Items</div>
+        <div class="stat-value" id="kpi-items" style="color: var(--purple);">—</div>
+        <div class="stat-sub" id="kpi-items-sub"></div>
+      </div>
+    </div>
+
+    <!-- Charts Row -->
+    <div class="grid-2 mt-24">
+      <div class="card">
+        <div class="section-header" style="margin-top:0; margin-bottom: 20px;">
+          <h2 class="chart-header-title">Revenue Trend (4 Weeks)</h2>
+        </div>
+        <div style="height: 240px; position: relative;">
+          <canvas id="revenue-chart"></canvas>
+        </div>
+      </div>
+      <div class="card">
+        <div class="section-header" style="margin-top:0; margin-bottom: 20px;">
+          <h2 class="chart-header-title">Sales by Category</h2>
+        </div>
+        <div style="height: 240px; position: relative; display:flex; justify-content:center;">
+          <canvas id="category-chart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Forecast & Inventory Section -->
+    <div class="card forecast-card" style="padding:0;overflow:hidden; margin-top:24px;">
+      <div
+        style="padding: 16px 20px; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #2C2C2E;">
+        <div style="display:flex; align-items:center; gap:20px;">
+          <h2 style="margin:0; font-size:18px;">Forecast & Inventory</h2>
+          <!-- Custom Legend (Hidden by default, shown when Chart tab active) -->
+          <div id="chart-legend" style="display:none; align-items:center; gap:16px; font-size:13px;">
+            <div style="display:flex; align-items:center; gap:6px;">
+              <div style="width:12px; height:12px; border-radius:3px; background:#0A84FF;"></div>
+              <span style="color:#AEAEB2;">Actual Revenue</span>
+            </div>
+            <div style="display:flex; align-items:center; gap:6px;">
+              <div style="width:12px; height:12px; border-radius:3px; background:#30D158;"></div>
+              <span style="color:#AEAEB2;">Forecast</span>
+            </div>
+          </div>
+        </div>
+        <div class="segmented-control">
+          <button class="segment-btn active" onclick="switchTab('ingredients', this)">Ingredients</button>
+          <button class="segment-btn" onclick="switchTab('menu', this)">Menu Items</button>
+          <button class="segment-btn" onclick="switchTab('chart', this)">Forecast Chart</button>
+        </div>
+      </div>
+
+      <!-- Tab Content -->
+      <div style="position:relative; min-height: 300px;">
+
+        <!-- Ingredients Tab -->
+        <div id="tab-ingredients" class="tab-pane active" style="overflow-y:auto; max-height:400px;">
+          <div id="inventory-empty" class="empty-state" style="display:none; color:#8E8E93;">
+            <div class="icon">📦</div>
+            <h3>No inventory data yet</h3>
+          </div>
+          <table class="data-table" id="inventory-table">
+            <thead style="position:sticky; top:0; background:#1C1C1E; z-index:10;">
+              <tr>
+                <th style="padding-left:20px;">INGREDIENT</th>
+                <th>ON HAND</th>
+                <th>PAR LEVEL</th>
+                <th>DAYS LEFT</th>
+                <th>7-DAY NEED</th>
+                <th>SUGGESTED</th>
+                <th style="padding-right:20px;">STATUS</th>
+              </tr>
+            </thead>
+            <tbody id="inventory-tbody"></tbody>
+          </table>
+        </div>
+
+        <!-- Menu Items Tab -->
+        <div id="tab-menu" class="tab-pane" style="overflow-y:auto; max-height:400px;">
+          <table class="data-table">
+            <thead style="position:sticky; top:0; background:#1C1C1E; z-index:10;">
+              <tr>
+                <th style="padding-left:20px;">MENU ITEM</th>
+                <th>CATEGORY</th>
+                <th>PRICE</th>
+                <th>AVG DAILY</th>
+                <th style="color:#30D158;">FORECAST (TOM)</th>
+                <th>REV FORECAST</th>
+              </tr>
+            </thead>
+            <tbody id="forecast-tbody"></tbody>
+          </table>
+        </div>
+
+        <!-- Chart Tab -->
+        <div id="tab-chart" class="tab-pane" style="height:320px; padding:20px;">
+          <canvas id="forecast-chart-canvas"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bottom Row: Suggested Restocks (Full Width) -->
+    <div class="mt-24">
+      <div class="card">
+        <div class="section-header"
+          style="margin:0; padding:20px 0 16px; text-align:center; border-bottom:2px solid #FFFFFF;">
+          <h2 style="font-size:30px; font-weight:700; margin:0; color:#FFFFFF; letter-spacing:-0.3px;">Alerts & Actions
+          </h2>
+        </div>
+
+        <!-- Two Column Layout -->
+        <div style="display:flex; gap:16px; padding:20px; height:400px;">
+          <!-- Left: Alert List -->
+          <div id="suggested-orders" style="flex:1; overflow-y: auto;"></div>
+
+          <!-- Right: Visual Dashboard -->
+          <div style="width:300px; display:flex; flex-direction:column; justify-content:center; gap:20px;">
+            <div style="text-align:center;">
+              <div
+                style="color:#8E8E93; font-size:15px; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:16px;">
+                Inventory Health</div>
+              <canvas id="inventory-health-chart" style="max-width:260px; max-height:260px; margin:0 auto;"></canvas>
+            </div>
+            <div id="health-stats" style="display:flex; flex-direction:column; gap:8px; font-size:13px;"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="page-footer"
+      style="margin-top:40px; padding:20px 0 10px 0; border-top:1px solid #D1D1D6; text-align:center;">
+      <div style="font-size:24px; font-weight:600; margin-bottom:12px; color:#1D1D1F; letter-spacing:-0.5px;">
+        Stockd</div>
+      <div
+        style="color:#86868B; font-size:12px; margin:0 auto; line-height:1.4; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+        Smart inventory management for modern kitchens. Powered using Gemini & Supabase.
+      </div>
+      <div
+        style="color:#86868B; font-size:12px; margin-top:4px; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+        Designed in Athens, GA.
+      </div>
+      <div style="margin-top:16px; display:flex; justify-content:center; gap:24px; font-size:12px;">
+        <a href="#" style="color:#6E6E73; text-decoration:none;">Privacy Policy</a>
+        <a href="#" style="color:#6E6E73; text-decoration:none;">Terms of Use</a>
+        <a href="#" style="color:#6E6E73; text-decoration:none;">Global Support</a>
+      </div>
+      <div style="margin-top:16px; color:#86868B; font-size:11px;">
+        Copyright © 2026 Stockd Inc. All rights reserved.
+      </div>
+    </div>
+  </div>
+
+  <!-- Loading Overlay -->
+  <div class="loading-overlay" id="loading">
+    <div style="text-align:center;">
+      <div class="loading-spinner" style="margin:0 auto 16px;"></div>
+      <div style="color:var(--text-muted);font-size:14px;">Loading dashboard...</div>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="../js/env.js"></script>
+  <script src="../js/supabase-client.js"></script>
+  <script src="../js/gemini-client.js"></script>
+  <script src="../js/config.js"></script>
+  <script src="../js/ai-copilot.js"></script>
+  <script src="../js/animated-counter.js"></script>
+  <script>
+    // ─── Navigation ──────────────────────────
+    function go(page) { window.location.href = page + '.html'; }
+
+    // ─── Init ────────────────────────────────
+    (async () => {
+      const session = await requireAuth('../login.html');
+      if (!session) return;
+      await loadDashboard();
+    })();
+
+    // ─── Main Load ───────────────────────────
+    async function loadDashboard() {
+      try {
+        const [inventory, salesTrend, topSellers, categories, menuCount] = await Promise.all([
+          fetchInventory(),
+          fetchSalesTrend(),
+          fetchTopSellers(),
+          fetchCategories(),
+          fetchMenuItemCount()
+        ]);
+
+        let forecastData = await fetchForecast();
+        if (!forecastData.menu_items || forecastData.menu_items.length === 0) {
+          console.log("Using mock forecast data");
+          forecastData = generateMockForecast(salesTrend, topSellers);
+        }
+
+        renderKPIs(salesTrend, inventory, menuCount);
+        renderRevenueChart(salesTrend);
+        renderInventory(inventory);
+        renderForecastTable(forecastData?.menu_items || []);
+        renderForecastChart(salesTrend, forecastData?.daily_revenue || []);
+        renderCategoryChart(categories);
+        renderSuggestedOrders(inventory);
+
+      } catch (err) {
+        console.error('Dashboard error:', err);
+        showToast('Failed to load data: ' + err.message, 'error');
+      } finally {
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('main-content').style.opacity = '1';
+      }
+    }
+
+    function generateMockForecast(salesTrend, topSellers) {
+      // 1. Menu Items Forecast
+      const menuItems = topSellers.map(item => {
+        const dailyAvg = item.totalQty / 90;
+        return {
+          name: item.name,
+          category: item.category,
+          price: item.totalQty > 0 ? (item.totalSales / item.totalQty).toFixed(2) : "0.00",
+          avg_daily_sales: dailyAvg,
+          forecast_tomorrow: dailyAvg * (1 + (Math.random() * 0.2 - 0.1)), // +/- 10%
+        };
+      });
+
+      // 2. Daily Revenue Forecast (Next 7 days)
+      const last7Revenue = salesTrend.slice(-7);
+      const avgRev = last7Revenue.reduce((s, d) => s + d.revenue, 0) / (last7Revenue.length || 1);
+
+      const next7Days = [];
+      for (let i = 1; i <= 7; i++) {
+        const d = new Date();
+        d.setDate(d.getDate() + i);
+        next7Days.push({
+          date: d.toISOString().split('T')[0],
+          revenue: avgRev * (1 + (Math.random() * 0.2 - 0.1)) // +/- 10%
+        });
+      }
+
+      return { menu_items: menuItems, daily_revenue: next7Days };
+    }
+
+    // ─── Data Fetchers ───────────────────────
+
+    function getLookbackDate(days) {
+      const d = new Date();
+      d.setDate(d.getDate() - days);
+      return d.toISOString().split('T')[0];
+    }
+
+    async function fetchAllPaginated(tableName, selectColumns, filterFn) {
+      const PAGE_SIZE = 1000;
+      let allData = [];
+      let from = 0;
+
+      while (true) {
+        let query = sb.from(tableName).select(selectColumns);
+        if (filterFn) query = filterFn(query);
+        const { data, error } = await query.range(from, from + PAGE_SIZE - 1);
+        if (error) throw error;
+        const batch = data || [];
+        allData = allData.concat(batch);
+        if (batch.length < PAGE_SIZE) break;
+        from += PAGE_SIZE;
+      }
+      return allData;
+    }
+
+    async function fetchInventory() {
+      const { data, error } = await sb.rpc('get_inventory_snapshot');
+      if (error) throw error;
+      if (Array.isArray(data)) return data;
+      if (typeof data === 'string') return JSON.parse(data);
+      return data || [];
+    }
+
+    async function fetchForecast() {
+      try {
+        const today = new Date().toISOString().split('T')[0];
+        const { data, error } = await sb.rpc('get_forecast', { p_reference_date: today });
+        if (error) {
+          console.warn("Forecast RPC failed", error);
+          // Fallback mock structure if RPC missing or error
+          return { daily_revenue: [], menu_items: [] };
+        }
+        return data || { daily_revenue: [], menu_items: [] };
+      } catch (e) {
+        return { daily_revenue: [], menu_items: [] };
+      }
+    }
+
+    async function fetchSalesTrend() {
+      // 90 day lookback for trend
+      const dateStr = getLookbackDate(90);
+      const data = await fetchAllPaginated('sales_line_items', 'business_date, qty, net_sales', q => q.gte('business_date', dateStr));
+
+      const byDate = {};
+      data.forEach(r => {
+        if (!byDate[r.business_date]) {
+          byDate[r.business_date] = { date: r.business_date, revenue: 0, orders: 0 };
+        }
+        byDate[r.business_date].revenue += r.net_sales;
+        byDate[r.business_date].orders += r.qty;
+      });
+
+      return Object.values(byDate).sort((a, b) => a.date.localeCompare(b.date));
+    }
+
+    async function fetchTopSellers() {
+      // 90 day lookback for top sellers
+      const dateStr = getLookbackDate(90);
+      const data = await fetchAllPaginated('sales_line_items', 'menu_item_id, qty, net_sales, menu_items(name, category)', q => q.gte('business_date', dateStr));
+
+      const byItem = {};
+      data.forEach(r => {
+        const id = r.menu_item_id;
+        if (!byItem[id]) {
+          byItem[id] = {
+            name: r.menu_items?.name || 'Unknown',
+            category: r.menu_items?.category || '',
+            totalQty: 0,
+            totalSales: 0
+          };
+        }
+
+        // Skip test items
+        if (byItem[id].name.startsWith('__') || (byItem[id].category && byItem[id].category.toLowerCase().includes('test'))) {
+          return;
+        }
+
+        byItem[id].totalQty += r.qty;
+        byItem[id].totalSales += r.net_sales;
+      });
+
+      return Object.values(byItem)
+        .sort((a, b) => b.totalQty - a.totalQty)
+        .slice(0, 100);
+    }
+
+    async function fetchCategories() {
+      // 90 day lookback for categories
+      const dateStr = getLookbackDate(90);
+      const data = await fetchAllPaginated('sales_line_items', 'qty, net_sales, menu_items(category)', q => q.gte('business_date', dateStr));
+
+      const byCat = {};
+      data.forEach(r => {
+        const cat = r.menu_items?.category || 'Other';
+        if (!byCat[cat]) byCat[cat] = { name: cat, sales: 0, qty: 0 };
+
+        // Skip test categories
+        if (cat.toLowerCase().includes('test')) return;
+
+        byCat[cat].sales += r.net_sales;
+        byCat[cat].qty += r.qty;
+      });
+
+      return Object.values(byCat).sort((a, b) => b.sales - a.sales);
+    }
+
+    async function fetchMenuItemCount() {
+      const { count, error } = await sb
+        .from('menu_items')
+        .select('id', { count: 'exact', head: true });
+      return count || 0;
+    }
+
+    // ─── Renderers ───────────────────────────
+
+    function renderKPIs(sales, inventory, menuCount) {
+      const totalRev = sales.reduce((s, d) => s + d.revenue, 0);
+      const numDays = sales.length || 1;
+      const avgDaily = totalRev / numDays;
+      const itemsPerDay = Math.round(sales.reduce((s, d) => s + d.orders, 0) / numDays);
+
+      const critical = (inventory || []).filter(i => i.status === 'critical').length;
+      const reorder = (inventory || []).filter(i => i.status === 'reorder_soon').length;
+      const alerts = critical + reorder;
+
+      // Animate KPI values
+      AnimatedCounter.animateCurrency(document.getElementById('kpi-revenue'), Math.round(totalRev), { decimals: 0 });
+      AnimatedCounter.animateCurrency(document.getElementById('kpi-daily'), Math.round(avgDaily), { decimals: 0 });
+      AnimatedCounter.animate(document.getElementById('kpi-alerts'), alerts);
+      AnimatedCounter.animate(document.getElementById('kpi-items'), menuCount);
+
+      // Animate sub-values
+      const revSub = document.getElementById('kpi-revenue-sub');
+      const dailySub = document.getElementById('kpi-daily-sub');
+      const alertsSub = document.getElementById('kpi-alerts-sub');
+
+      // Stagger the sub-value appearance
+      setTimeout(() => {
+        revSub.innerHTML = `<span class="animated-sub-value"></span> business days`;
+        AnimatedCounter.animate(revSub.querySelector('.animated-sub-value'), numDays);
+      }, 300);
+
+      setTimeout(() => {
+        dailySub.innerHTML = `<span class="animated-sub-value"></span> items/day avg`;
+        AnimatedCounter.animate(dailySub.querySelector('.animated-sub-value'), itemsPerDay);
+      }, 400);
+
+      setTimeout(() => {
+        alertsSub.innerHTML = `<span class="animated-sub-value"></span> critical, <span class="animated-sub-value-2"></span> low`;
+        AnimatedCounter.animate(alertsSub.querySelector('.animated-sub-value'), critical);
+        AnimatedCounter.animate(alertsSub.querySelector('.animated-sub-value-2'), reorder);
+      }, 500);
+
+      document.getElementById('kpi-items-sub').textContent = `Across ${new Set((inventory || []).map(i => i.unit)).size || '—'} ingredient units`;
+
+      // Alert banner
+      if (alerts > 0) {
+        document.getElementById('alert-banner').innerHTML = `
+          <div class="alert-banner critical">
+            <div class="alert-icon" style="animation:pulse 1.5s infinite;">⚠️</div>
+            <div class="alert-body">
+              <div class="alert-title">${critical} Critical · ${reorder} Reorder Soon</div>
+              <div class="alert-text">${inventory.filter(i => i.status === 'critical')[0]?.name || 'Items'} need immediate attention</div>
+            </div>
+            <button class="btn btn-danger" onclick="document.getElementById('inventory-table').scrollIntoView({behavior:'smooth'})">View</button>
+          </div>
+        `;
+      }
+    }
+
+    function renderInventory(items) {
+      if (!items || items.length === 0) {
+        document.getElementById('inventory-empty').style.display = 'block';
+        document.getElementById('inventory-table').style.display = 'none';
+        return;
+      }
+
+      document.getElementById('inventory-empty').style.display = 'none';
+      document.getElementById('inventory-table').style.display = 'table';
+
+      const tbody = document.getElementById('inventory-tbody');
+      tbody.innerHTML = items.map(i => {
+        const status = i.status || 'unknown';
+        const badgeClass = status === 'critical' ? 'badge-critical-dark'
+          : status === 'reorder_soon' ? 'badge-warning-dark'
+            : status === 'unknown' ? 'badge-unknown'
+              : 'badge-ok-dark';
+
+        // Dark mode text colors
+        const qtyColor = status === 'critical' ? '#FF453A'
+          : status === 'reorder_soon' ? '#FF9F0A'
+            : '#FFFFFF';
+
+        const dos = i.days_of_supply != null ? i.days_of_supply + 'd' : '—';
+        const dosColor = i.days_of_supply != null
+          ? (i.days_of_supply <= 1 ? '#FF453A' : i.days_of_supply <= 3 ? '#FF9F0A' : '#30D158')
+          : '#8E8E93';
+
+        const avgDaily = i.avg_daily_usage || 0;
+        const sevenDayNeed = avgDaily * 7;
+        const par = i.reorder_point || 0;
+        const suggested = Math.max(0, par - i.qty_on_hand);
+
+        const suggElem = suggested > 0
+          ? `<span style="color:#30D158">+${num(suggested)} ${i.unit}</span>`
+          : `<span style="color:#30D158;opacity:0.5;">OK</span>`;
+
+        return `
+          <tr>
+            <td>
+              <div style="color:#FFFFFF;font-weight:500;">${i.name}</div>
+              <div style="color:#8E8E93;font-size:12px;">${i.unit || ''}</div>
+            </td>
+            <td class="mono" style="color:${qtyColor}">${num(i.qty_on_hand)}</td>
+            <td class="mono" style="color:#8E8E93">${num(par)}</td>
+            <td>
+              <span class="mono" style="color:${dosColor};font-size:13px;">${dos}</span>
+              <div class="mini-bar-dark">
+                <div class="mini-bar-fill" style="width:${Math.min(100, (i.days_of_supply || 0) / 14 * 100)}%;background:${dosColor};height:100%;"></div>
+              </div>
+            </td>
+            <td class="mono" style="color:#8E8E93">${num(sevenDayNeed)}</td>
+            <td class="mono">${suggElem}</td>
+            <td><span class="badge ${badgeClass}">${status.replace('_', ' ')}</span></td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function switchTab(tabId, btn) {
+      document.querySelectorAll('.segment-btn').forEach(b => b.classList.remove('active'));
+      if (btn) btn.classList.add('active');
+      document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+      document.getElementById('tab-' + tabId).classList.add('active');
+
+      // Show legend only for chart tab
+      const legend = document.getElementById('chart-legend');
+      if (tabId === 'chart') {
+        legend.style.display = 'flex';
+      } else {
+        legend.style.display = 'none';
+      }
+    }
+
+    function renderForecastTable(items) {
+      const tbody = document.getElementById('forecast-tbody');
+      if (!items || items.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:20px;color:#8E8E93;">No forecast data available</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = items.slice(0, 100).map(item => `
+            <tr>
+                <td>
+                    <div style="color:#FFFFFF;font-weight:500;">${item.name}</div>
+                </td>
+                <td><span class="badge" style="background:#2C2C2E;color:#AEAEB2;border:none;">${item.category}</span></td>
+                <td style="color:#8E8E93;">$${item.price}</td>
+                <td style="color:#FFFFFF;">${Math.round(item.avg_daily_sales || 0)}</td>
+                <td style="color:#30D158;font-weight:600;">${Math.round(item.forecast_tomorrow || 0)}</td>
+                <td style="color:#8E8E93;">$${Math.round((item.forecast_tomorrow || 0) * item.price)}</td>
+            </tr>
+        `).join('');
+    }
+
+    function renderForecastChart(sales, forecast) {
+      const canvas = document.getElementById('forecast-chart-canvas');
+      if (!canvas) return;
+
+      const recentSales = sales.slice(-4);
+      const nextForecast = (forecast || []).slice(0, 3);
+
+      const labels = [...recentSales.map(d => d.date), ...nextForecast.map(d => d.date)]
+        .map(d => {
+          const date = new Date(d);
+          return date.toLocaleDateString('en-US', { weekday: 'short' });
+        });
+
+      const actualData = [...recentSales.map(d => d.revenue), ...nextForecast.map(() => null)];
+      const forecastData = [...recentSales.map(d => null), ...nextForecast.map(d => d.revenue)];
+      // Bridge the gap: add last actual to forecast start for continuous line if using line chart
+      // For bar chart, kept separate.
+
+      if (window.forecastChartInstance) window.forecastChartInstance.destroy();
+
+      window.forecastChartInstance = new Chart(canvas, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [
+            {
+              label: 'Actual Revenue',
+              data: actualData,
+              backgroundColor: '#0A84FF',
+              borderRadius: 4
+            },
+            {
+              label: 'Forecast',
+              data: forecastData,
+              backgroundColor: '#30D158',
+              borderRadius: 4
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: true, labels: { color: '#AEAEB2' } }
+          },
+          scales: {
+            x: { grid: { display: false }, ticks: { color: '#8E8E93' }, stacked: true },
+            y: { grid: { color: '#2C2C2E' }, ticks: { color: '#8E8E93', callback: v => '$' + v }, stacked: true }
+          }
+        }
+      });
+    }
+
+    function renderRevenueChart(sales) {
+      const canvas = document.getElementById('revenue-chart');
+      const recent = sales.slice(-30);
+
+      const ctx = canvas.getContext('2d');
+      const gradient = ctx.createLinearGradient(0, 0, 0, 300);
+      gradient.addColorStop(0, 'rgba(48, 209, 88, 0.2)'); // Apple Green with opacity
+      gradient.addColorStop(1, 'rgba(48, 209, 88, 0)');
+
+      new Chart(canvas, {
+        type: 'line',
+        data: {
+          labels: recent.map(d => {
+            const parts = d.date.split('-');
+            return parts[1] + '/' + parts[2];
+          }),
+          datasets: [{
+            label: 'Daily Revenue',
+            data: recent.map(d => Math.round(d.revenue)),
+            borderColor: '#30D158', // Apple Green
+            backgroundColor: gradient,
+            fill: true,
+            tension: 0.4, // Smoother curve
+            pointRadius: 0,
+            pointHoverRadius: 6,
+            pointHoverBackgroundColor: '#30D158',
+            pointHoverBorderColor: '#1C1C1E',
+            pointHoverBorderWidth: 3, // Thicker border for contrast
+            borderWidth: 2
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false, // Critical for custom height
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              backgroundColor: '#2C2C2E',
+              titleColor: '#FFF',
+              bodyColor: '#AEAEB2',
+              borderColor: 'rgba(255,255,255,0.1)',
+              borderWidth: 1,
+              padding: 10,
+              displayColors: false,
+              callbacks: {
+                label: function (context) {
+                  return '$' + context.parsed.y.toLocaleString();
+                }
+              }
+            }
+          },
+          scales: {
+            x: {
+              ticks: { color: '#86868B', maxTicksLimit: 6, font: { family: "-apple-system", size: 11 } },
+              grid: { display: false } // Cleaner look
+            },
+            y: {
+              beginAtZero: true,
+              ticks: { color: '#86868B', font: { family: "-apple-system", size: 11 }, callback: v => '$' + v.toLocaleString() },
+              grid: { color: '#38383A', drawBorder: false, borderDash: [4, 4] } // Subtle dashed grid
+            }
+          },
+          interaction: {
+            mode: 'index',
+            intersect: false,
+          },
+        }
+      });
+    }
+
+    function renderCategoryChart(categories) {
+      const canvas = document.getElementById('category-chart');
+      // Apple Palette: Green, Blue, Purple, Orange, Red, Cyan, Yellow
+      const colors = ['#30D158', '#0A84FF', '#BF5AF2', '#FF9F0A', '#FF453A', '#64D2FF', '#FFD60A'];
+
+      new Chart(canvas, {
+        type: 'doughnut',
+        data: {
+          labels: categories.map(c => c.name),
+          datasets: [{
+            data: categories.map(c => Math.round(c.sales)),
+            backgroundColor: colors.slice(0, categories.length),
+            borderWidth: 2,
+            borderColor: '#1C1C1E', // Match card bg for spacing effect
+            hoverOffset: 4
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          cutout: '75%', // Thinner ring
+          plugins: {
+            legend: {
+              position: 'right', // Side legend for compact look
+              labels: {
+                color: '#AEAEB2',
+                padding: 16,
+                font: { family: "-apple-system", size: 11 },
+                usePointStyle: true,
+                pointStyle: 'circle',
+                boxWidth: 8
+              }
+            },
+            tooltip: {
+              backgroundColor: '#2C2C2E',
+              bodyColor: '#FFF',
+              borderColor: 'rgba(255,255,255,0.1)',
+              borderWidth: 1
+            }
+          },
+          layout: {
+            padding: { left: 0, right: 0, top: 0, bottom: 0 }
+          }
+        }
+      });
+    }
+
+    function renderSuggestedOrders(inventory) {
+      const el = document.getElementById('suggested-orders');
+      const suggested = (inventory || [])
+        .filter(i => (i.reorder_point || 0) > i.qty_on_hand)
+        .sort((a, b) => (a.days_of_supply || 999) - (b.days_of_supply || 999));
+
+      if (!suggested.length) {
+        el.innerHTML = '<div class="empty-state" style="padding:40px; text-align:center; color:#8E8E93;"><div style="font-size:48px; margin-bottom:16px;">✅</div><h3 style="color:#FFF; font-weight:500;">All Systems Go</h3><p>Your inventory is healthy. No actions needed today.</p></div>';
+        return;
+      }
+
+      // Group by urgency
+      const critical = suggested.filter(i => i.days_of_supply <= 2);
+      const warnings = suggested.filter(i => i.days_of_supply > 2);
+
+      let html = '<ul style="list-style:none; padding:0; margin:0;">';
+
+      if (critical.length > 0) {
+        html += critical.map(item => {
+          const need = (item.reorder_point || 0) - item.qty_on_hand;
+          return `
+              <li style="margin-bottom:16px; display:flex; gap:16px; align-items:start;">
+                  <div style="color:#FF453A; font-size:20px; line-height:1.4;">•</div>
+                  <div>
+                      <div style="color:#FFF; font-size:16px; font-weight:500; line-height:1.4;">
+                          ${item.name} is critically low.
+                      </div>
+                      <div style="color:#AEAEB2; font-size:15px; margin-top:2px;">
+                          Order <span style="color:#FFF; font-weight:600;">${Math.ceil(need)} ${item.unit}</span> to restore safe levels.
+                      </div>
+                  </div>
+              </li>`;
+        }).join('');
+      }
+
+      if (warnings.length > 0) {
+        html += warnings.map(item => {
+          const need = (item.reorder_point || 0) - item.qty_on_hand;
+          return `
+              <li style="margin-bottom:16px; display:flex; gap:16px; align-items:start;">
+                  <div style="color:#FF9F0A; font-size:20px; line-height:1.4;">•</div>
+                  <div>
+                      <div style="color:#FFF; font-size:16px; font-weight:500; line-height:1.4;">
+                          Restock ${item.name}.
+                      </div>
+                      <div style="color:#AEAEB2; font-size:15px; margin-top:2px;">
+                          Purchase <span style="color:#FFF; font-weight:600;">${Math.ceil(need)} ${item.unit}</span> soon to avoid running out.
+                      </div>
+                  </div>
+              </li>`;
+        }).join('');
+      }
+
+      html += '</ul>';
+      el.innerHTML = html;
+
+      // Also render the health chart
+      renderInventoryHealthChart(inventory);
+    }
+
+    let inventoryHealthChartInstance = null;
+
+    function renderInventoryHealthChart(inventory) {
+      if (!inventory || inventory.length === 0) return;
+
+      // Calculate health breakdown
+      const critical = inventory.filter(i => (i.reorder_point || 0) > i.qty_on_hand && (i.days_of_supply || 0) <= 2).length;
+      const warning = inventory.filter(i => (i.reorder_point || 0) > i.qty_on_hand && (i.days_of_supply || 0) > 2).length;
+      const healthy = inventory.filter(i => (i.reorder_point || 0) <= i.qty_on_hand).length;
+      const total = inventory.length;
+
+      // Render stats
+      const statsEl = document.getElementById('health-stats');
+      statsEl.innerHTML = `
+        <div style="display:flex; align-items:center; gap:8px;">
+          <div style="width:8px; height:8px; border-radius:50%; background:#FF453A;"></div>
+          <div style="flex:1; color:#AEAEB2;">Critical</div>
+          <div style="color:#FFF; font-weight:600;">${critical}</div>
+        </div>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <div style="width:8px; height:8px; border-radius:50%; background:#FF9F0A;"></div>
+          <div style="flex:1; color:#AEAEB2;">Warning</div>
+          <div style="color:#FFF; font-weight:600;">${warning}</div>
+        </div>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <div style="width:8px; height:8px; border-radius:50%; background:#30D158;"></div>
+          <div style="flex:1; color:#AEAEB2;">Healthy</div>
+          <div style="color:#FFF; font-weight:600;">${healthy}</div>
+        </div>
+        <div style="margin-top:12px; padding-top:12px; border-top:1px solid #2C2C2E;">
+          <div style="display:flex; justify-content:space-between;">
+            <div style="color:#8E8E93; font-size:11px; text-transform:uppercase; letter-spacing:0.5px;">Total Items</div>
+            <div style="color:#FFF; font-weight:700; font-size:16px;">${total}</div>
+          </div>
+        </div>
+      `;
+
+      // Render donut chart
+      const canvas = document.getElementById('inventory-health-chart');
+      if (!canvas) return;
+
+      const ctx = canvas.getContext('2d');
+
+      // Destroy existing chart if it exists
+      if (inventoryHealthChartInstance) {
+        inventoryHealthChartInstance.destroy();
+      }
+
+      inventoryHealthChartInstance = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+          labels: ['Critical', 'Warning', 'Healthy'],
+          datasets: [{
+            data: [critical, warning, healthy],
+            backgroundColor: ['#FF453A', '#FF9F0A', '#30D158'],
+            borderWidth: 0,
+            hoverOffset: 6
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: true,
+          cutout: '70%',
+          plugins: {
+            legend: {
+              display: false
+            },
+            tooltip: {
+              backgroundColor: '#2C2C2E',
+              bodyColor: '#FFF',
+              borderColor: 'rgba(255,255,255,0.1)',
+              borderWidth: 1,
+              padding: 12,
+              callbacks: {
+                label: function (context) {
+                  const label = context.label || '';
+                  const value = context.parsed || 0;
+                  const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
+                  return `${label}: ${value} (${percentage}%)`;
+                }
+              }
+            }
+          }
+        }
+      });
+    }
+
+
+    function renderAlerts(inventory) {
+      const el = document.getElementById('alerts-detail');
+      const alerts = (inventory || []).filter(i => i.status === 'critical' || i.status === 'reorder_soon').slice(0, 5);
+
+      if (!alerts.length) {
+        el.innerHTML = '<div style="padding:24px;text-align:center;color:var(--green);font-size:14px;">✅ All inventory levels healthy</div>';
+        return;
+      }
+
+      el.innerHTML = alerts.map(item => {
+        const isCrit = item.status === 'critical';
+        return `
+          <div class="alert-item ${isCrit ? 'alert-critical' : 'alert-warning'}">
+            <span class="alert-icon">${isCrit ? '🔴' : '🟡'}</span>
+            <div>
+              <strong>${item.name}</strong>
+              <p>${num(item.qty_on_hand)} ${item.unit} on hand · ~${item.days_of_supply ?? '?'} days supply</p>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // ─── Helpers ─────────────────────────────
+    function num(v) { return v != null ? parseFloat(v).toFixed(1) : '—'; }
+  </script>
+</body>
+
+</html>

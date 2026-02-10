@@ -1,0 +1,760 @@
+/* ═══════════════════════════════════════════════
+   Stockd — Landing Page Styles
+   Aesthetic: Apple-inspired minimalist, premium
+   ═══════════════════════════════════════════════ */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+/* ── Variables ────────────────────────────── */
+:root {
+  --bg-white: #ffffff;
+  --bg-light: #fbfbfd;
+  --bg-section: #f5f5f7;
+  --text-primary: #1d1d1f;
+  --text-secondary: #86868b;
+  --text-tertiary: #6e6e73;
+  --accent-blue: #0071e3;
+  --accent-blue-hover: #0077ed;
+  --border-light: rgba(0, 0, 0, 0.08);
+  --font-main: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif;
+  --nav-height: 52px;
+  --max-width: 1120px;
+}
+
+/* ── Reset ────────────────────────────────── */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: 16px;
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: var(--font-main);
+  background: var(--bg-white);
+  color: var(--text-primary);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+a {
+  color: var(--accent-blue);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+/* ── Navigation ───────────────────────────── */
+.nav {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--nav-height);
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  border-bottom: 1px solid var(--border-light);
+  z-index: 1000;
+}
+
+.nav-container {
+  max-width: var(--max-width);
+  margin: 0 auto;
+  height: 100%;
+  padding: 0 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.nav-logo {
+  font-size: 21px;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.02em;
+}
+
+.nav-links {
+  display: flex;
+  align-items: center;
+  gap: 32px;
+}
+
+.nav-link {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  transition: color 0.2s;
+}
+
+.nav-link:hover {
+  color: var(--text-primary);
+  text-decoration: none;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 22px;
+  border-radius: 980px;
+  font-size: 14px;
+  font-weight: 500;
+  font-family: var(--font-main);
+  cursor: pointer;
+  transition: all 0.2s;
+  border: none;
+}
+
+.btn-primary {
+  background: var(--accent-blue);
+  color: #fff;
+}
+
+.btn-primary:hover {
+  background: var(--accent-blue-hover);
+  text-decoration: none;
+}
+
+.btn-secondary {
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid rgba(0, 0, 0, 0.2);
+}
+
+.btn-secondary:hover {
+  background: rgba(0, 0, 0, 0.04);
+  text-decoration: none;
+}
+
+.btn-nav {
+  padding: 8px 18px;
+  font-size: 13px;
+}
+
+/* ── Hero Section ─────────────────────────── */
+.hero {
+  padding-top: calc(var(--nav-height) + 80px);
+  padding-bottom: 60px;
+  text-align: center;
+  background: var(--bg-white);
+  overflow: hidden;
+}
+
+.hero-container {
+  max-width: var(--max-width);
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+.hero-headline {
+  font-size: clamp(40px, 8vw, 72px);
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+  margin-bottom: 20px;
+}
+
+.hero-subheadline {
+  font-size: clamp(18px, 2.5vw, 24px);
+  font-weight: 400;
+  color: var(--text-secondary);
+  max-width: 640px;
+  margin: 0 auto 36px;
+  line-height: 1.4;
+}
+
+.hero-ctas {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.btn-hero {
+  padding: 14px 28px;
+  font-size: 17px;
+  font-weight: 500;
+}
+
+/* ── Device Mockup: Apple-Style Black Cards ── */
+.hero-mockup {
+  margin-top: 60px;
+  perspective: 1200px;
+}
+
+.hero-mockup-wrapper {
+  position: relative;
+  max-width: 1000px;
+  margin: 0 auto;
+}
+
+/* Pure black dashboard card - Apple style */
+.hero-mockup-frame {
+  background: #000;
+  border-radius: 28px;
+  overflow: hidden;
+  box-shadow:
+    0 20px 60px -15px rgba(0, 0, 0, 0.3),
+    0 10px 30px -10px rgba(0, 0, 0, 0.2);
+}
+
+.hero-mockup-screen {
+  background: #000;
+  overflow: hidden;
+  position: relative;
+}
+
+/* Dashboard Preview - Pure Black */
+.dashboard-preview {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 24px;
+  background: #000;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', sans-serif;
+  gap: 16px;
+}
+
+/* Alert Banner */
+.dash-alert {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 20px;
+  background: rgba(255, 69, 58, 0.12);
+  border: 1px solid rgba(255, 69, 58, 0.25);
+  border-radius: 16px;
+}
+
+.dash-alert-icon {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.dash-alert-icon svg {
+  width: 24px;
+  height: 24px;
+  fill: #ff453a;
+}
+
+.dash-alert-content {
+  flex: 1;
+}
+
+.dash-alert-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #ff9f0a;
+  margin-bottom: 4px;
+}
+
+.dash-alert-message {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.dash-alert-btn {
+  padding: 8px 16px;
+  background: #30d158;
+  border: none;
+  border-radius: 980px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+/* Metric Cards Grid */
+.dash-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
+/* Metric Card - Apple Style with Hover Border */
+.dash-metric-card {
+  background: #1c1c1e;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
+  padding: 20px 18px 16px;
+  position: relative;
+  overflow: hidden;
+  transition: border-color 0.3s ease;
+}
+
+.dash-metric-card:hover {
+  border-color: rgba(100, 210, 255, 0.5);
+}
+
+.dash-metric-card.active {
+  border-color: #64d2ff;
+  box-shadow: 0 0 0 1px #64d2ff;
+}
+
+/* Colored accent bar at bottom */
+.dash-metric-card::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+}
+
+.dash-metric-card.green::after {
+  background: #30d158;
+}
+
+.dash-metric-card.blue::after {
+  background: #64d2ff;
+}
+
+.dash-metric-card.red::after {
+  background: #ff453a;
+}
+
+.dash-metric-card.purple::after {
+  background: #bf5af2;
+}
+
+/* Decorative corner icon */
+.dash-metric-icon {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 28px;
+  height: 28px;
+  opacity: 0.15;
+}
+
+.dash-metric-icon svg {
+  width: 100%;
+  height: 100%;
+  fill: #fff;
+}
+
+.dash-metric-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.5);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 10px;
+}
+
+.dash-metric-value {
+  font-size: 42px;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  margin-bottom: 8px;
+  font-feature-settings: 'tnum' on, 'lnum' on;
+}
+
+.dash-metric-subtitle {
+  font-size: 13px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.dash-metric-subtitle .up {
+  color: #30d158;
+}
+
+/* Charts Row */
+.dash-charts-row {
+  display: grid;
+  grid-template-columns: 1.5fr 1fr;
+  gap: 12px;
+}
+
+/* Chart Card - Apple Style */
+.dash-chart-card {
+  background: #1c1c1e;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.dash-chart-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.dash-chart-accent {
+  width: 4px;
+  height: 20px;
+  border-radius: 2px;
+}
+
+.dash-chart-accent.teal {
+  background: #30d158;
+}
+
+.dash-chart-accent.blue {
+  background: #64d2ff;
+}
+
+.dash-chart-title {
+  font-size: 17px;
+  font-weight: 600;
+  color: #fff;
+  letter-spacing: -0.01em;
+}
+
+/* Area Chart */
+.dash-area-chart {
+  flex: 1;
+  position: relative;
+  display: flex;
+  min-height: 120px;
+}
+
+.dash-y-axis {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding-right: 12px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.35);
+  font-weight: 500;
+  font-feature-settings: 'tnum' on;
+}
+
+.dash-chart-area {
+  flex: 1;
+  position: relative;
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.dash-chart-area svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.dash-x-axis {
+  display: flex;
+  justify-content: space-between;
+  padding-top: 12px;
+  padding-left: 48px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.35);
+  font-weight: 500;
+}
+
+/* Donut Chart Container */
+.dash-donut-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+}
+
+.dash-donut-ring {
+  width: 140px;
+  height: 140px;
+  position: relative;
+}
+
+.dash-donut-ring svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+/* Horizontal Legend */
+.dash-legend {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px 18px;
+}
+
+.dash-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.7);
+  font-weight: 500;
+}
+
+.dash-legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.dash-legend-dot.teal {
+  background: #30d158;
+}
+
+.dash-legend-dot.blue {
+  background: #64d2ff;
+}
+
+.dash-legend-dot.purple {
+  background: #bf5af2;
+}
+
+.dash-legend-dot.orange {
+  background: #ff9f0a;
+}
+
+.dash-legend-dot.pink {
+  background: #ff375f;
+}
+
+.dash-legend-dot.purple {
+  background: #bf5af2;
+}
+
+.dash-legend-dot.orange {
+  background: #ff9f0a;
+}
+
+.dash-legend-dot.pink {
+  background: #ff375f;
+}
+
+/* ── Features Section ─────────────────────── */
+.features {
+  padding: 100px 24px;
+  background: var(--bg-section);
+}
+
+.features-container {
+  max-width: var(--max-width);
+  margin: 0 auto;
+}
+
+.features-header {
+  text-align: center;
+  margin-bottom: 64px;
+}
+
+.features-headline {
+  font-size: clamp(32px, 5vw, 48px);
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.02em;
+}
+
+.features-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 32px;
+}
+
+.feature-card {
+  text-align: center;
+  padding: 32px 24px;
+}
+
+.feature-icon {
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.feature-icon svg {
+  width: 48px;
+  height: 48px;
+  stroke: var(--text-tertiary);
+  stroke-width: 1.5;
+  fill: none;
+}
+
+.feature-title {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 12px;
+}
+
+.feature-description {
+  font-size: 15px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  max-width: 320px;
+  margin: 0 auto;
+}
+
+/* ── CTA Section ──────────────────────────── */
+.cta-section {
+  padding: 100px 24px;
+  background: var(--bg-white);
+  text-align: center;
+}
+
+.cta-container {
+  max-width: 680px;
+  margin: 0 auto;
+}
+
+.cta-headline {
+  font-size: clamp(28px, 4vw, 40px);
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.02em;
+  margin-bottom: 16px;
+}
+
+.cta-subtext {
+  font-size: 18px;
+  color: var(--text-secondary);
+  margin-bottom: 32px;
+}
+
+/* ── Footer ───────────────────────────────── */
+.footer {
+  padding: 24px;
+  background: var(--bg-section);
+  border-top: 1px solid var(--border-light);
+}
+
+.footer-container {
+  max-width: var(--max-width);
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.footer-copyright {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.footer-links {
+  display: flex;
+  gap: 24px;
+}
+
+.footer-link {
+  font-size: 12px;
+  color: var(--text-secondary);
+  transition: color 0.2s;
+}
+
+.footer-link:hover {
+  color: var(--text-primary);
+}
+
+/* ── Responsive ───────────────────────────── */
+@media (max-width: 900px) {
+  .features-grid {
+    grid-template-columns: 1fr;
+    gap: 48px;
+  }
+
+  .nav-links {
+    gap: 20px;
+  }
+
+  .nav-link {
+    display: none;
+  }
+
+  .dash-content {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .dash-charts {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 600px) {
+  .hero-headline {
+    font-size: 36px;
+  }
+
+  .hero-subheadline {
+    font-size: 17px;
+  }
+
+  .hero-ctas {
+    flex-direction: column;
+  }
+
+  .btn-hero {
+    width: 100%;
+    max-width: 280px;
+  }
+
+  .hero-mockup-frame {
+    border-radius: 12px;
+    padding: 8px;
+  }
+
+  .footer-container {
+    flex-direction: column;
+    text-align: center;
+  }
+}
+
+/* ── Animations ───────────────────────────── */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fadeInUp 0.8s ease forwards;
+}
+
+.animate-delay-1 {
+  animation-delay: 0.1s;
+  opacity: 0;
+}
+
+.animate-delay-2 {
+  animation-delay: 0.2s;
+  opacity: 0;
+}
+
+.animate-delay-3 {
+  animation-delay: 0.3s;
+  opacity: 0;
+}

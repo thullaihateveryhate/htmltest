@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Stockd — Receive Inventory</title>
+  <link rel="icon" type="image/svg+xml" href="../assets/logo-s.svg">
+  <link rel="stylesheet" href="../css/app-light.css">
+  <style>
+    /* Enhanced Table Styles for Receive Page */
+    .receipts-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+
+    .receipts-table th {
+      padding: 16px 20px;
+      text-align: left;
+      color: var(--text-muted);
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .receipts-table th:last-child {
+      text-align: right;
+    }
+
+    .receipts-table td {
+      padding: 20px;
+      border-bottom: 1px solid var(--border-light);
+      color: var(--text-primary);
+      vertical-align: middle;
+    }
+
+    .receipts-table td:last-child {
+      text-align: right;
+    }
+
+    .receipts-table tbody tr {
+      transition: background 0.2s ease;
+    }
+
+    .receipts-table tbody tr:nth-child(odd) {
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .receipts-table tbody tr:hover {
+      background: rgba(255, 255, 255, 0.06);
+    }
+
+    .receipts-table .date-cell {
+      font-family: var(--font-mono);
+      font-size: 13px;
+      color: var(--text-secondary);
+      width: 15%;
+    }
+
+    .receipts-table .ingredient-cell {
+      font-weight: 500;
+      color: var(--text-primary);
+      width: 25%;
+    }
+
+    .receipts-table .qty-cell {
+      font-family: var(--font-mono);
+      color: var(--green);
+      font-weight: 600;
+      width: 20%;
+    }
+
+    .receipts-table .note-cell {
+      color: var(--text-muted);
+      font-size: 13px;
+      width: 30%;
+    }
+
+    .receipts-table .action-cell {
+      width: 10%;
+    }
+
+    .action-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      padding: 8px;
+      border-radius: 8px;
+      transition: all 0.2s;
+      font-size: 16px;
+    }
+
+    .action-btn:hover {
+      background: rgba(255, 255, 255, 0.1);
+      color: var(--text-primary);
+    }
+
+    /* Card Title Styling */
+    .card-title {
+      color: #FFF;
+      font-size: 20px;
+      font-weight: 700;
+      margin: 0 0 24px 0;
+      letter-spacing: -0.3px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .card-title-icon {
+      font-size: 24px;
+    }
+
+    /* Full Width Table Card */
+    .full-width-table-card {
+      margin-top: 24px;
+    }
+  </style>
+</head>
+
+<body>
+
+  <nav class="topnav">
+    <div class="topnav-brand">
+      <div class="topnav-icon"></div>
+      <div>
+        <div class="topnav-title">Stockd</div>
+        <div class="topnav-sub">Receive Delivery</div>
+      </div>
+    </div>
+    <div class="topnav-links">
+      <button class="topnav-link" onclick="go('dashboard')">Dashboard</button>
+      <button class="topnav-link" onclick="go('sales-analysis')">Sales Analysis</button>
+      <button class="topnav-link active" onclick="go('receive')">Receive</button>
+      <button class="topnav-link" onclick="go('count')">Count</button>
+    </div>
+    <div class="topnav-actions">
+      <button class="btn btn-primary" onclick="toggleAIPanel()">✨ Copilot</button>
+      <button class="btn btn-outline" onclick="signOut()">⏻</button>
+    </div>
+  </nav>
+
+  <div class="page-container">
+    <h1 style="color:var(--text-primary);font-size:45px;margin-bottom:8px;font-weight:700;">
+      Receive Inventory
+    </h1>
+    <p style="color:var(--text-muted);font-size:19px;margin-bottom:28px;line-height:1.5;">
+      Upload a US Foods invoice to automatically update stock, or manually record a delivery below.
+    </p>
+
+    <!-- Top Row: 2 Cards Side by Side -->
+    <div class="grid-2">
+      <!-- Card 1: Upload Invoice (Automated Method) -->
+      <div class="card">
+        <h2 class="card-title">
+          <span class="card-title-icon">📄</span> Upload Invoice
+        </h2>
+
+        <div class="form-group">
+          <label class="form-label">Select PDF Invoice</label>
+          <input type="file" id="invoice-upload" accept=".pdf" class="form-input">
+        </div>
+
+        <button class="btn btn-secondary btn-block" id="analyze-btn" onclick="analyzeInvoice()">
+          Analyze Invoice
+        </button>
+
+        <!-- Results Container -->
+        <div id="invoice-results" style="display:none; margin-top:20px;">
+          <h3 style="font-size:14px; margin-bottom:10px; color:var(--text-primary);">Matched Items</h3>
+          <div style="overflow-x:auto;">
+            <table class="data-table" id="matches-table">
+              <thead>
+                <tr>
+                  <th><input type="checkbox" id="select-all" checked onchange="toggleAllMatches(this)"></th>
+                  <th>Ingredient</th>
+                  <th>Qty</th>
+                  <th>Unit</th>
+                  <th>Details</th>
+                </tr>
+              </thead>
+              <tbody id="matches-tbody"></tbody>
+            </table>
+          </div>
+
+          <div id="unmatched-count" style="margin-top:10px; font-size:12px; color:var(--text-muted);"></div>
+
+          <button class="btn btn-primary btn-block" id="confirm-invoice-btn" onclick="confirmInvoiceReceive()"
+            style="margin-top:16px;">
+            Confirm & Receive Selected
+          </button>
+        </div>
+
+        <div id="invoice-status" style="margin-top:10px;"></div>
+      </div>
+
+      <!-- Card 2: Manual Entry -->
+      <div class="card">
+        <h2 class="card-title">
+          <span class="card-title-icon">✏️</span> Manual Entry
+        </h2>
+
+        <div class="form-group">
+          <label class="form-label">Ingredient</label>
+          <select class="form-select" id="ingredient-select">
+            <option value="">— Select ingredient —</option>
+          </select>
+          <div style="color:var(--text-dim);font-size:11px;margin-top:4px;" id="current-stock"></div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Quantity Received</label>
+          <input type="number" class="form-input mono" id="qty-input" placeholder="0" min="0.01" step="0.01">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Note (optional)</label>
+          <input type="text" class="form-input" id="note-input" placeholder="e.g. Weekly delivery from Sysco">
+        </div>
+
+        <button class="btn btn-primary btn-block" id="submit-btn" onclick="submitReceive()">
+          Receive Inventory
+        </button>
+
+        <div id="status-msg" style="margin-top:12px;"></div>
+      </div>
+    </div>
+
+    <!-- Bottom Section: Full Width Recent Receipts Table -->
+    <div class="card full-width-table-card" style="padding:0;overflow:hidden;">
+      <div style="padding:24px 24px 0 24px;">
+        <h2 style="color:#FFF; font-size:20px; font-weight:700; margin:0 0 20px 0; letter-spacing:-0.3px;">
+          Recent Receipts
+        </h2>
+      </div>
+      <table class="receipts-table">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Ingredient</th>
+            <th>Quantity</th>
+            <th>Note</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody id="receipts-tbody"></tbody>
+      </table>
+    </div>
+
+    <div class="page-footer"
+      style="margin-top:40px; padding:20px 0 10px 0; border-top:1px solid #D1D1D6; text-align:center;">
+      <div style="font-size:24px; font-weight:600; margin-bottom:12px; color:#1D1D1F; letter-spacing:-0.5px;">
+        Stockd</div>
+      <div
+        style="color:#86868B; font-size:12px; margin:0 auto; line-height:1.4; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+        Smart inventory management for modern kitchens. Powered using Gemini & Supabase.
+      </div>
+      <div
+        style="color:#86868B; font-size:12px; margin-top:4px; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+        Designed in Athens, GA.
+      </div>
+      <div style="margin-top:16px; display:flex; justify-content:center; gap:24px; font-size:12px;">
+        <a href="#" style="color:#6E6E73; text-decoration:none;">Privacy Policy</a>
+        <a href="#" style="color:#6E6E73; text-decoration:none;">Terms of Use</a>
+        <a href="#" style="color:#6E6E73; text-decoration:none;">Global Support</a>
+      </div>
+      <div style="margin-top:16px; color:#86868B; font-size:11px;">
+        Copyright © 2026 Stockd Inc. All rights reserved.
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="../js/env.js"></script>
+  <script src="../js/config.js"></script>
+  <script src="../js/supabase-client.js"></script>
+  <script src="../js/gemini-client.js"></script>
+  <script src="../js/ai-copilot.js"></script>
+  <script src="../js/animated-counter.js"></script>
+
+  <!-- Import Module Script -->
+  <script type="module">
+    import { getInvoiceMatches } from '../js/invoice-matcher.js';
+
+    window.analyzeInvoice = async function () {
+      const fileInput = document.getElementById('invoice-upload');
+      const file = fileInput.files[0];
+      const statusEl = document.getElementById('invoice-status');
+
+      if (!file) {
+        statusEl.innerHTML = '<span style="color:var(--red)">Please select a PDF file first</span>';
+        return;
+      }
+
+      try {
+        statusEl.innerHTML = '<span style="color:var(--blue)">Analyzing PDF... this may take a moment</span>';
+        document.getElementById('analyze-btn').disabled = true;
+
+        const { matches, unmatched } = await getInvoiceMatches(file, sb);
+
+        renderMatches(matches, unmatched);
+        statusEl.innerHTML = '';
+      } catch (err) {
+        console.error(err);
+        statusEl.innerHTML = `<span style="color:var(--red)">Error: ${err.message}</span>`;
+      } finally {
+        document.getElementById('analyze-btn').disabled = false;
+      }
+    };
+
+    let currentMatches = [];
+
+    function renderMatches(matches, unmatched) {
+      currentMatches = matches;
+      const container = document.getElementById('invoice-results');
+      const tbody = document.getElementById('matches-tbody');
+      const unmatchedEl = document.getElementById('unmatched-count');
+
+      container.style.display = 'block';
+
+      if (matches.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px;">No ingredients matched from this invoice.</td></tr>';
+        document.getElementById('confirm-invoice-btn').disabled = true;
+        return;
+      }
+
+      document.getElementById('confirm-invoice-btn').disabled = false;
+
+      tbody.innerHTML = matches.map((m, idx) => `
+        <tr>
+          <td><input type="checkbox" class="match-checkbox" data-idx="${idx}" checked></td>
+          <td style="font-weight:500;">${m.ingredientName}</td>
+          <td class="mono" style="color:var(--green)">+${m.qtyShipped}</td>
+          <td class="mono" style="font-size:12px;">${m.ingredientUnit}</td>
+          <td style="font-size:11px; color:var(--text-muted)">
+            Ordered: ${m.qtyOrdered}<br>Product #: ${m.productNumber}
+          </td>
+        </tr>
+      `).join('');
+
+      unmatchedEl.textContent = `${unmatched.length} unmatched line items hidden.`;
+    }
+
+    window.toggleAllMatches = function (source) {
+      const checkboxes = document.querySelectorAll('.match-checkbox');
+      checkboxes.forEach(cb => cb.checked = source.checked);
+    };
+
+    window.confirmInvoiceReceive = async function () {
+      const checkboxes = document.querySelectorAll('.match-checkbox:checked');
+      if (checkboxes.length === 0) return;
+
+      const btn = document.getElementById('confirm-invoice-btn');
+      btn.disabled = true;
+      btn.textContent = 'Processing...';
+
+      let successCount = 0;
+      let failCount = 0;
+
+      for (const cb of checkboxes) {
+        const idx = parseInt(cb.getAttribute('data-idx'));
+        const item = currentMatches[idx];
+
+        try {
+          const { error } = await sb.rpc('receive_inventory', {
+            p_ingredient_id: item.ingredientId,
+            p_qty: item.qtyShipped,
+            p_note: `Invoice Upload: ${item.productNumber}`
+          });
+
+          if (error) throw error;
+          successCount++;
+        } catch (e) {
+          console.error('Failed to receive item:', item, e);
+          failCount++;
+        }
+      }
+
+      alert(`Processed invoice.\nSuccess: ${successCount}\nFailed: ${failCount}`);
+
+      // Reset
+      btn.textContent = 'Confirm & Receive Selected';
+      btn.disabled = false;
+      document.getElementById('invoice-results').style.display = 'none';
+      document.getElementById('invoice-upload').value = '';
+
+      // Refresh recents
+      loadRecentReceipts();
+    };
+  </script>
+
+  <script>
+    function go(page) { window.location.href = page + '.html'; }
+
+    let ingredients = [];
+
+    (async () => {
+      await requireAuth('../login.html');
+      // Run independently so one failure doesn't block the other
+      loadIngredients().catch(err => console.error('Ingredients load failed', err));
+      loadRecentReceipts().catch(err => console.error('Receipts load failed', err));
+    })();
+
+    async function loadIngredients() {
+      const { data, error } = await sb.from('ingredients').select('id, name, unit');
+      if (error) { showToast('Failed to load ingredients', 'error'); return; }
+      ingredients = data || [];
+
+      const sel = document.getElementById('ingredient-select');
+      sel.innerHTML = '<option value="">— Select ingredient —</option>' +
+        ingredients.map(i => `<option value="${i.id}">${i.name} (${i.unit})</option>`).join('');
+
+      sel.addEventListener('change', async () => {
+        const id = sel.value;
+        if (!id) { document.getElementById('current-stock').textContent = ''; return; }
+        // Fetch current on-hand
+        const { data: oh } = await sb.from('inventory_on_hand').select('qty_on_hand').eq('ingredient_id', id).single();
+        const ing = ingredients.find(i => i.id === id);
+        document.getElementById('current-stock').textContent =
+          oh ? `Current on-hand: ${oh.qty_on_hand} ${ing?.unit || ''}` : 'No inventory record yet';
+      });
+    }
+
+    async function submitReceive() {
+      const id = document.getElementById('ingredient-select').value;
+      const qty = parseFloat(document.getElementById('qty-input').value);
+      const note = document.getElementById('note-input').value || null;
+
+      if (!id) { setStatus('Select an ingredient', 'error'); return; }
+      if (!qty || qty <= 0) { setStatus('Enter a valid quantity', 'error'); return; }
+
+      document.getElementById('submit-btn').disabled = true;
+      setStatus('Processing...', 'info');
+
+      const { data, error } = await sb.rpc('receive_inventory', {
+        p_ingredient_id: id, p_qty: qty, p_note: note
+      });
+
+      if (error || data?.status === 'error') {
+        setStatus('❌ ' + (data?.message || error?.message), 'error');
+        document.getElementById('submit-btn').disabled = false;
+        return;
+      }
+
+      const ing = ingredients.find(i => i.id === id);
+      setStatus(`✅ Received ${qty} ${ing?.unit || ''} of ${ing?.name}. New on-hand: ${data.new_qty_on_hand}`, 'success');
+      showToast('Delivery recorded!', 'success');
+
+      document.getElementById('qty-input').value = '';
+      document.getElementById('note-input').value = '';
+      document.getElementById('current-stock').textContent = `Current on-hand: ${data.new_qty_on_hand} ${ing?.unit || ''}`;
+      document.getElementById('submit-btn').disabled = false;
+      loadRecentReceipts();
+    }
+
+    // Define Demo Data Function FIRST
+    function getDemoReceiptsData() {
+      const today = new Date();
+      return [
+        {
+          id: 'demo-r-1',
+          created_at: new Date(today.getTime() - 2 * 60 * 60 * 1000).toISOString(),
+          qty_delta: 320,
+          note: 'Sysco Regular Delivery',
+          ingredients: { name: 'Mozzarella Cheese', unit: 'oz' }
+        },
+        {
+          id: 'demo-r-2',
+          created_at: new Date(today.getTime() - 4 * 60 * 60 * 1000).toISOString(),
+          qty_delta: 500,
+          note: 'Flour Resupply',
+          ingredients: { name: 'Pizza Dough (Flour)', unit: 'oz' }
+        },
+        {
+          id: 'demo-r-3',
+          created_at: new Date(today.getTime() - 24 * 60 * 60 * 1000).toISOString(),
+          qty_delta: 50,
+          note: 'Produce Vendor',
+          ingredients: { name: 'Red Onions', unit: 'oz' }
+        },
+        {
+          id: 'demo-r-4',
+          created_at: new Date(today.getTime() - 26 * 60 * 60 * 1000).toISOString(),
+          qty_delta: 100,
+          note: 'Produce Vendor',
+          ingredients: { name: 'Bell Peppers', unit: 'oz' }
+        },
+        {
+          id: 'demo-r-5',
+          created_at: new Date(today.getTime() - 48 * 60 * 60 * 1000).toISOString(),
+          qty_delta: 15,
+          note: 'Emergency Store Run',
+          ingredients: { name: 'Basil', unit: 'oz' }
+        }
+      ];
+    }
+
+    async function loadRecentReceipts() {
+      console.log('Starting loadRecentReceipts...');
+      let data = [];
+      const tbody = document.getElementById('receipts-tbody');
+      if (!tbody) return;
+
+      try {
+        if (typeof sb !== 'undefined') {
+          const result = await sb
+            .from('inventory_txns')
+            .select('id, created_at, qty_delta, note, ingredients(name, unit)')
+            .eq('txn_type', 'RECEIVE')
+            .order('created_at', { ascending: false })
+            .limit(10);
+
+          if (result.data) data = result.data;
+        }
+      } catch (err) {
+        console.warn('Supabase fetch failed, using demo data', err);
+      }
+
+      // Force demo data if empty
+      if (!data || data.length === 0) {
+        console.log('Loading demo data...');
+        data = getDemoReceiptsData();
+      }
+
+      if (data.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:20px;">No receipts found.</td></tr>';
+        return;
+      }
+
+      console.log('Rendering', data.length, 'rows');
+      tbody.innerHTML = data.map(t => {
+        const dateStr = t.created_at ? new Date(t.created_at).toLocaleDateString() : '—';
+        const name = t.ingredients?.name || '—';
+        const unit = t.ingredients?.unit || '';
+        const note = t.note || '—';
+
+        return `
+        <tr>
+          <td class="date-cell">${dateStr}</td>
+          <td class="ingredient-cell">${name}</td>
+          <td class="qty-cell">+${t.qty_delta} ${unit}</td>
+          <td class="note-cell">${note}</td>
+          <td class="action-cell">
+            <button class="action-btn" onclick="showReceiptOptions('${t.id}')">⋮</button>
+          </td>
+        </tr>`;
+      }).join('');
+    }
+
+    function showReceiptOptions(receiptId) {
+      // Placeholder for future action menu (Edit, Delete, View Details)
+      console.log('Receipt options for:', receiptId);
+    }
+
+    function setStatus(msg, type) {
+      const el = document.getElementById('status-msg');
+      const colors = {
+        'error': 'var(--red)',
+        'success': 'var(--green)',
+        'info': 'var(--blue)'
+      };
+      el.style.color = colors[type] || 'var(--text-muted)';
+      el.textContent = msg;
+    }
+  </script>
+</body>
+
+</html>

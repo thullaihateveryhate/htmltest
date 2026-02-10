@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install:*)",
+      "Bash(curl:*)",
+      "Bash(PORT=3001 node:*)",
+      "Bash(ipconfig:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(node scripts/ingest-test-data.js:*)",
+      "Bash(node scripts/ingest-order-details.js:*)",
+      "Bash(node scripts/reset-inventory.js:*)",
+      "Bash(node scripts/update-dates-to-2025.js:*)",
+      "Bash(for i in {1..25})",
+      "Bash(do echo \"=== Run $i ===\")",
+      "Bash(done)"
+    ]
+  }
+}

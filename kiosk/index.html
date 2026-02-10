@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tony's Pizza — Order Kiosk</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="kiosk.css?v=2">
+</head>
+<body>
+
+  <!-- ─── Header ─────────────────────────── -->
+  <header class="header">
+    <div class="header-brand">
+      <span class="header-emoji">🍕</span>
+      <div>
+        <div class="header-title">Tony's Pizza</div>
+        <div class="header-sub">Self-Order Kiosk</div>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="header-clock" id="header-clock"></div>
+      <div class="header-badges">
+        <span class="badge" id="badge-items">0 items</span>
+        <span class="badge badge-accent" id="badge-total">$0.00</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- ─── Main ───────────────────────────── -->
+  <main class="layout">
+
+    <!-- Left: Menu Side -->
+    <section class="menu-side">
+
+      <!-- Welcome -->
+      <div class="welcome-banner">
+        <div class="welcome-icon">👋</div>
+        <div>
+          <div class="welcome-title">Welcome! Build your order</div>
+          <div class="welcome-sub">Pick a category, choose an item, and add it to your cart.</div>
+        </div>
+      </div>
+
+      <!-- Item Selector -->
+      <div class="selector-panel">
+        <div class="selector-step">
+          <div class="step-badge">1</div>
+          <div class="selector-row">
+            <label class="selector-label" for="cat-select">Category</label>
+            <select class="selector-dropdown" id="cat-select">
+              <option value="all">All Categories</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="selector-step">
+          <div class="step-badge">2</div>
+          <div class="selector-row">
+            <label class="selector-label" for="item-select">Menu Item</label>
+            <select class="selector-dropdown" id="item-select">
+              <option value="">— pick a menu item —</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="selector-step">
+          <div class="step-badge">3</div>
+          <div class="selector-row selector-actions">
+            <label class="selector-label">Quantity &amp; Add</label>
+            <div class="action-controls">
+              <div class="qty-stepper">
+                <button class="qty-step-btn" id="qty-minus" type="button">−</button>
+                <input type="number" class="qty-input" id="add-qty" min="1" value="1" readonly>
+                <button class="qty-step-btn" id="qty-plus" type="button">+</button>
+              </div>
+              <button class="btn-add" id="btn-add" disabled>
+                <span class="btn-add-icon">+</span> Add to Order
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Item count -->
+      <div class="menu-stats" id="menu-stats"></div>
+    </section>
+
+    <!-- Right: Cart Side -->
+    <aside class="cart-side">
+      <div class="cart-head">
+        <h2>🛒 Your Order</h2>
+        <button class="link-btn" id="btn-clear">Clear All</button>
+      </div>
+
+      <div class="cart-body" id="cart-body">
+        <div class="cart-empty" id="cart-empty">
+          <div class="cart-empty-icon">📋</div>
+          <p class="cart-empty-title">No items yet</p>
+          <p class="cart-empty-sub">Use the menu on the left to add items</p>
+        </div>
+      </div>
+
+      <div class="cart-foot">
+        <div class="summary-row"><span>Subtotal</span><span id="s-sub">$0.00</span></div>
+        <div class="summary-row"><span>Tax (8%)</span><span id="s-tax">$0.00</span></div>
+        <div class="summary-row total-row"><span>Total</span><span id="s-total">$0.00</span></div>
+
+        <div class="option-row">
+          <select id="dining-opt">
+            <option value="Dine In">🍽 Dine In</option>
+            <option value="Take Out">📦 Take Out</option>
+            <option value="Delivery">🚗 Delivery</option>
+          </select>
+          <div class="guest-wrap">
+            <label for="guests">Guests</label>
+            <input type="number" id="guests" min="1" value="1">
+          </div>
+        </div>
+
+        <button class="btn-order" id="btn-order" disabled>
+          Place Order
+        </button>
+      </div>
+    </aside>
+  </main>
+
+  <!-- ─── Confirmation Overlay ───────────── -->
+  <div class="overlay" id="overlay">
+    <div class="modal">
+      <div class="modal-check">✓</div>
+      <h2>Order Placed!</h2>
+      <p id="modal-msg"></p>
+      <div class="modal-detail" id="modal-detail"></div>
+      <button class="btn-order" id="btn-new">Start New Order</button>
+    </div>
+  </div>
+
+  <!-- ─── Toast ──────────────────────────── -->
+  <div class="toast-box" id="toast-box"></div>
+
+  <!-- ─── Scripts ────────────────────────── -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="kiosk.js"></script>
+</body>
+</html>

@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Stockd — Upload Daily Report</title>
+  <link rel="stylesheet" href="../css/app-light.css">
+</head>
+
+<body>
+
+  <nav class="topnav">
+    <div class="topnav-brand">
+      <div class="topnav-icon">R</div>
+      <div>
+        <div class="topnav-title">Stockd</div>
+        <div class="topnav-sub">Daily Upload</div>
+      </div>
+    </div>
+    <div class="topnav-links">
+      <button class="topnav-link" onclick="go('dashboard')">Dashboard</button>
+      <button class="topnav-link active" onclick="go('upload')">Upload</button>
+      <button class="topnav-link" onclick="go('receive')">Receive</button>
+      <button class="topnav-link" onclick="go('count')">Count</button>
+    </div>
+    <div class="topnav-actions">
+      <button class="btn btn-outline" onclick="signOut()">⏻</button>
+    </div>
+  </nav>
+
+  <div class="page-narrow">
+    <h1 style="color:var(--text-primary);font-size:22px;margin-bottom:8px;" class="animate-in">
+      Upload Daily Sales Report
+    </h1>
+    <p style="color:var(--text-muted);font-size:13px;margin-bottom:28px;line-height:1.5;" class="animate-in stagger-1">
+      Upload today's Toast POS export. The system will parse sales, update inventory consumption,
+      and refresh your dashboard.
+    </p>
+
+    <div class="card animate-in stagger-2">
+      <div class="upload-zone" id="upload-zone" onclick="document.getElementById('csv-input').click()">
+        <input type="file" id="csv-input" accept=".csv">
+        <div class="icon">📄</div>
+        <div class="label">Drop your daily CSV here or <a>browse files</a></div>
+        <div class="hint">Toast ItemSelectionDetails or simplified daily format</div>
+      </div>
+
+      <div id="parse-preview" style="display:none;margin-top:16px;"></div>
+
+      <button id="upload-btn" class="btn btn-primary btn-block btn-lg mt-16" disabled>
+        Process & Upload
+      </button>
+
+      <div style="margin-top:14px;">
+        <div class="progress-bar">
+          <div class="progress-bar-fill" id="progress-fill"></div>
+        </div>
+        <div class="progress-label" id="progress-label"></div>
+      </div>
+
+      <div id="status-msg"></div>
+    </div>
+
+    <!-- Recent uploads log -->
+    <div class="section-header">
+      <h2>Recent Sales Days</h2>
+    </div>
+    <div class="card" style="padding:0;overflow:hidden;">
+      <table class="data-table" id="recent-table">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Items Sold</th>
+            <th>Revenue</th>
+            <th>Menu Items</th>
+          </tr>
+        </thead>
+        <tbody id="recent-tbody"></tbody>
+      </table>
+    </div>
+
+    <div class="page-footer">Stockd v0.1 · UGAHacks 11</div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="../js/env.js"></script>
+  <script src="../js/supabase-client.js"></script>
+  <script src="../js/csv-parser.js"></script>
+  <script>
+    function go(page) { window.location.href = page + '.html'; }
+
+    let parsedData = null;
+
+    (async () => {
+      const session = await requireAuth('../login.html');
+      if (!session) return;
+      loadRecentDays();
+    })();
+
+    // File handling
+    const zone = document.getElementById('upload-zone');
+    const input = document.getElementById('csv-input');
+    zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('dragover'); });
+    zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
+    zone.addEventListener('drop', e => {
+      e.preventDefault(); zone.classList.remove('dragover');
+      if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+    });
+    input.addEventListener('change', e => { if (e.target.files[0]) handleFile(e.target.files[0]); });
+
+    async function handleFile(file) {
+      setStatus('Parsing...', 'info');
+      try {
+        parsedData = await parseToastCSV(file);
+        const s = parsedData.stats;
+
+        document.getElementById('parse-preview').style.display = 'block';
+        document.getElementById('parse-preview').innerHTML = `
+          <div class="parse-stats">
+            <div class="stat-row"><span class="label">Rows</span><span class="value">${s.aggregatedRows}</span></div>
+            <div class="stat-row"><span class="label">Date(s)</span><span class="value">${s.startDate}${s.startDate !== s.endDate ? ' → ' + s.endDate : ''}</span></div>
+            <div class="stat-row"><span class="label">Items</span><span class="value">${s.uniqueItems} menu items</span></div>
+            <div class="stat-row"><span class="label">Sales</span><span class="value">$${s.totalSales.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
+          </div>
+        `;
+
+        document.getElementById('upload-btn').disabled = false;
+        setStatus('✅ Ready to upload', 'success');
+      } catch (err) {
+        setStatus('❌ ' + err.message, 'error');
+      }
+    }
+
+    document.getElementById('upload-btn').addEventListener('click', async () => {
+      if (!parsedData) return;
+      const btn = document.getElementById('upload-btn');
+      btn.disabled = true;
+
+      try {
+        setStatus('📤 Uploading...', 'info');
+        const result = await ingestBatched(parsedData.rows, (done, total) => {
+          const pct = Math.round(done / total * 100);
+          document.getElementById('progress-fill').style.width = pct + '%';
+          document.getElementById('progress-label').textContent = `${done}/${total} (${pct}%)`;
+        });
+
+        // Run daily close for each date
+        const dates = [...new Set(parsedData.rows.map(r => r.business_date))];
+        for (const d of dates) {
+          setStatus(`⚙️ Running daily close for ${d}...`, 'info');
+          const { error } = await sb.rpc('run_daily_close', { p_business_date: d });
+          if (error) console.warn('Daily close warning:', error.message);
+        }
+
+        setStatus(`🎉 Done! ${result.totalProcessed} rows for ${dates.join(', ')}. Inventory updated.`, 'success');
+        showToast('Upload complete!', 'success');
+        loadRecentDays();
+      } catch (err) {
+        setStatus('❌ ' + err.message, 'error');
+        btn.disabled = false;
+      }
+    });
+
+    async function loadRecentDays() {
+      const { data, error } = await sb
+        .from('sales_line_items')
+        .select('business_date, qty, net_sales, menu_item_id');
+      if (error) return;
+
+      const byDate = {};
+      data.forEach(r => {
+        if (!byDate[r.business_date]) byDate[r.business_date] = { date: r.business_date, qty: 0, sales: 0, items: new Set() };
+        byDate[r.business_date].qty += r.qty;
+        byDate[r.business_date].sales += r.net_sales;
+        byDate[r.business_date].items.add(r.menu_item_id);
+      });
+
+      const sorted = Object.values(byDate).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 10);
+
+      document.getElementById('recent-tbody').innerHTML = sorted.map(d => `
+        <tr>
+          <td class="mono" style="color:var(--text-primary)">${d.date}</td>
+          <td class="mono">${Math.round(d.qty)}</td>
+          <td class="mono" style="color:var(--accent)">$${Math.round(d.sales).toLocaleString()}</td>
+          <td class="mono">${d.items.size}</td>
+        </tr>
+      `).join('');
+    }
+
+    function setStatus(msg, type = 'info') {
+      const el = document.getElementById('status-msg');
+      el.className = `status-msg ${type}`;
+      el.textContent = msg;
+    }
+  </script>
+</body>
+
+</html>

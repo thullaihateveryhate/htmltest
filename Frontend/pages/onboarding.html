@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Stockd — Setup</title>
+  <link rel="stylesheet" href="../css/app-light.css">
+</head>
+
+<body>
+
+  <!-- Top Nav (minimal for onboarding) -->
+  <nav class="topnav">
+    <div class="topnav-brand">
+      <div class="topnav-icon">R</div>
+      <div>
+        <div class="topnav-title">Stockd</div>
+        <div class="topnav-sub">First-Time Setup</div>
+      </div>
+    </div>
+    <button class="btn btn-outline" onclick="signOut()">Sign Out</button>
+  </nav>
+
+  <div class="page-narrow">
+
+    <h1 style="color:var(--text-primary);font-size:24px;margin-bottom:8px;" class="animate-in">
+      Upload Your Sales History
+    </h1>
+    <p style="color:var(--text-muted);font-size:14px;margin-bottom:32px;line-height:1.6;" class="animate-in stagger-1">
+      Upload your Toast POS export (<span class="mono">ItemSelectionDetails</span> CSV) to load historical
+      sales data. This establishes the baseline for inventory tracking and demand forecasting.
+    </p>
+
+    <!-- Step 1: File Upload -->
+    <div class="card step animate-in stagger-2">
+      <div class="step-header">
+        <div class="step-num" id="step1-num">1</div>
+        <div class="step-title">Select Your Toast Export CSV</div>
+      </div>
+
+      <div class="upload-zone" id="upload-zone" onclick="document.getElementById('csv-input').click()">
+        <input type="file" id="csv-input" accept=".csv">
+        <div class="icon">📄</div>
+        <div class="label">Drop your CSV here or <a>browse files</a></div>
+        <div class="hint">Toast_ItemSelectionDetails.csv · Up to 50MB</div>
+      </div>
+
+      <div id="parse-preview" style="display:none;margin-top:16px;"></div>
+    </div>
+
+    <!-- Step 2: Upload + Process -->
+    <div class="card step animate-in stagger-3">
+      <div class="step-header">
+        <div class="step-num" id="step2-num">2</div>
+        <div class="step-title">Upload & Initialize</div>
+      </div>
+
+      <p style="color:var(--text-muted);font-size:13px;margin-bottom:14px;line-height:1.5;">
+        Review the parsed data above, then click to send it to your database.
+        The system will create menu items, ingest sales, and process the full
+        consumption history.
+      </p>
+
+      <button id="upload-btn" class="btn btn-primary btn-block btn-lg" disabled>
+        Upload to Database
+      </button>
+
+      <div style="margin-top:14px;">
+        <div class="progress-bar">
+          <div class="progress-bar-fill" id="progress-fill"></div>
+        </div>
+        <div class="progress-label" id="progress-label"></div>
+      </div>
+
+      <div id="status-msg"></div>
+    </div>
+
+    <div class="page-footer">Stockd v0.1 · UGAHacks 11</div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="../js/env.js"></script>
+  <script src="../js/supabase-client.js"></script>
+  <script src="../js/csv-parser.js"></script>
+  <script>
+    // ─── State ───────────────────────────────
+    let parsedData = null;
+
+    // ─── Init ────────────────────────────────
+    (async () => {
+      const session = await requireAuth('../login.html');
+      if (!session) return;
+
+      // If already set up, redirect
+      const { data } = await sb.rpc('get_onboarding_status');
+      if (data && data.setup_complete) {
+        setStatus('✅ Already set up! Redirecting to dashboard...', 'success');
+        setTimeout(() => window.location.href = 'dashboard.html', 1500);
+        return;
+      }
+    })();
+
+    // ─── File Selection ──────────────────────
+    const zone = document.getElementById('upload-zone');
+    const input = document.getElementById('csv-input');
+
+    // Drag and drop
+    zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('dragover'); });
+    zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
+    zone.addEventListener('drop', e => {
+      e.preventDefault();
+      zone.classList.remove('dragover');
+      if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+    });
+    input.addEventListener('change', e => {
+      if (e.target.files[0]) handleFile(e.target.files[0]);
+    });
+
+    async function handleFile(file) {
+      setStatus('📄 Parsing CSV...', 'info');
+      try {
+        parsedData = await parseToastCSV(file);
+        showPreview(parsedData.stats);
+        document.getElementById('step1-num').classList.add('done');
+        document.getElementById('step1-num').textContent = '✓';
+      } catch (err) {
+        setStatus('❌ ' + err.message, 'error');
+      }
+    }
+
+    function showPreview(s) {
+      const el = document.getElementById('parse-preview');
+      el.style.display = 'block';
+      el.innerHTML = `
+        <div class="parse-stats">
+          <div class="stat-row"><span class="label">Raw CSV rows</span><span class="value">${s.rawRows.toLocaleString()}</span></div>
+          <div class="stat-row"><span class="label">Voids filtered</span><span class="value">${s.voidsFiltered}</span></div>
+          <div class="stat-row"><span class="label">Aggregated rows</span><span class="value">${s.aggregatedRows.toLocaleString()}</span></div>
+          <div class="stat-row"><span class="label">Unique menu items</span><span class="value">${s.uniqueItems}</span></div>
+          <div class="stat-row"><span class="label">Categories</span><span class="value">${s.uniqueCategories}</span></div>
+          <div class="stat-row"><span class="label">Date range</span><span class="value">${s.startDate} → ${s.endDate} (${s.totalDays} days)</span></div>
+          <div class="stat-row"><span class="label">Total units sold</span><span class="value">${Math.round(s.totalQty).toLocaleString()}</span></div>
+          <div class="stat-row"><span class="label">Total net sales</span><span class="value">$${s.totalSales.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
+        </div>
+      `;
+
+      const btn = document.getElementById('upload-btn');
+      btn.disabled = false;
+      btn.textContent = `Upload ${s.aggregatedRows.toLocaleString()} rows to database`;
+      setStatus('✅ Parsed successfully. Review above, then upload.', 'success');
+    }
+
+    // ─── Upload ──────────────────────────────
+    document.getElementById('upload-btn').addEventListener('click', startUpload);
+
+    async function startUpload() {
+      if (!parsedData) return;
+      const btn = document.getElementById('upload-btn');
+      btn.disabled = true;
+
+      try {
+        // Phase 1: Ingest
+        setStatus('📤 Uploading sales data...');
+        const result = await ingestBatched(parsedData.rows, (done, total) => {
+          setProgress(done, total);
+        });
+
+        setStatus(`✅ ${result.totalProcessed} rows uploaded, ${result.totalItemsCreated} menu items created.`, 'success');
+
+        // Phase 2: Complete onboarding
+        setStatus('📊 Finalizing onboarding...');
+        const { error: obErr } = await sb.rpc('complete_onboarding_ingest');
+        if (obErr) throw new Error('Finalization failed: ' + obErr.message);
+
+        // Phase 3: Bulk close
+        setStatus('⚙️ Processing consumption history... (this may take a moment)');
+        const { data: closeData, error: closeErr } = await sb.rpc('run_bulk_close');
+        if (closeErr) throw new Error('Bulk close failed: ' + closeErr.message);
+
+        document.getElementById('step2-num').classList.add('done');
+        document.getElementById('step2-num').textContent = '✓';
+
+        const msg = `🎉 Setup complete! ${closeData.dates_processed} dates processed, ` +
+          `${closeData.total_consume_txns} consumption transactions. Redirecting...`;
+        setStatus(msg, 'success');
+
+        setTimeout(() => window.location.href = 'dashboard.html', 3000);
+      } catch (err) {
+        setStatus('❌ ' + err.message, 'error');
+        btn.disabled = false;
+      }
+    }
+
+    // ─── UI Helpers ──────────────────────────
+    function setStatus(msg, type = 'info') {
+      const el = document.getElementById('status-msg');
+      el.className = `status-msg ${type}`;
+      el.textContent = msg;
+    }
+
+    function setProgress(current, total) {
+      const pct = Math.round(current / total * 100);
+      document.getElementById('progress-fill').style.width = pct + '%';
+      document.getElementById('progress-label').textContent =
+        `${current.toLocaleString()} / ${total.toLocaleString()} rows (${pct}%)`;
+    }
+  </script>
+</body>
+
+</html>

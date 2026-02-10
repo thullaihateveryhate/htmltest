@@ -1,0 +1,39 @@
+{
+  "name": "ugahacks11",
+  "version": "1.0.0",
+  "description": "let it begin!",
+  "main": "index.js",
+  "scripts": {
+    "test": "jest --runInBand --verbose",
+    "test:watch": "jest --runInBand --watch",
+    "config": "node scripts/generate-config.js",
+    "start": "npx serve Frontend",
+    "start:backend": "node Backend/server.js",
+    "start:kiosk": "npx serve kiosk -l 3000"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/panjabandharyana/ugahacks11.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/panjabandharyana/ugahacks11/issues"
+  },
+  "homepage": "https://github.com/panjabandharyana/ugahacks11#readme",
+  "dependencies": {
+    "@elevenlabs/elevenlabs-js": "^2.34.0",
+    "@supabase/supabase-js": "^2.95.3",
+    "cors": "^2.8.6",
+    "dotenv": "^17.2.4",
+    "express": "^5.2.1",
+    "papaparse": "^5.5.3",
+    "pdfjs-dist": "^5.4.624"
+  },
+  "devDependencies": {
+    "jest": "^30.2.0",
+    "supabase": "^2.76.3"
+  }
+}

@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Stockd</title>
+  <link rel="icon" type="image/svg+xml" href="assets/logo-s.svg">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+
+<body>
+  <div class="loading-overlay" id="loading">
+    <div style="text-align:center;">
+      <div class="loading-spinner" style="margin:0 auto 16px;"></div>
+      <div style="color:var(--text-muted);font-size:13px;">Loading Stockd...</div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/env.js"></script>
+  <script src="js/supabase-client.js"></script>
+  <script>
+    (async () => {
+      // Check if user is authenticated
+      const { data: { session } } = await sb.auth.getSession();
+
+      // If not logged in, show the landing page
+      if (!session) {
+        window.location.href = 'landing.html';
+        return;
+      }
+
+      // If logged in, route to dashboard or onboarding
+      const dest = await routeByOnboarding();
+      if (dest) {
+        window.location.href = dest === 'onboarding'
+          ? 'pages/onboarding.html'
+          : 'pages/dashboard.html';
+      }
+    })();
+  </script>
+</body>
+
+</html>

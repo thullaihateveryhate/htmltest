@@ -1,0 +1,1003 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Stockd — Sales Analysis</title>
+  <link rel="icon" type="image/svg+xml" href="../assets/logo-s.svg">
+  <link rel="stylesheet" href="../css/app-light.css">
+</head>
+
+<body>
+
+  <nav class="topnav">
+    <div class="topnav-brand">
+      <div class="topnav-icon"></div>
+      <div>
+        <div class="topnav-title">Stockd</div>
+        <div class="topnav-sub">Sales Analysis</div>
+      </div>
+    </div>
+    <div class="topnav-links">
+      <button class="topnav-link" onclick="go('dashboard')">Dashboard</button>
+      <button class="topnav-link active" onclick="go('sales-analysis')">Sales Analysis</button>
+      <button class="topnav-link" onclick="go('receive')">Receive</button>
+      <button class="topnav-link" onclick="go('count')">Count</button>
+    </div>
+    <div class="topnav-actions">
+      <button class="btn btn-primary" onclick="toggleAIPanel()">✨ Copilot</button>
+      <button class="btn btn-outline" onclick="signOut()">⏻</button>
+    </div>
+  </nav>
+
+  <div class="page-container">
+    <h1 style="color:var(--text-primary);font-size:45px;margin-bottom:8px;font-weight:700;">
+      Sales Analysis
+    </h1>
+    <p style="color:var(--text-muted);font-size:19px;margin-bottom:28px;line-height:1.5;">
+      Performance insights and smart pricing recommendations powered by your sales data.
+    </p>
+
+    <!-- Top Row: 2 Cards Side by Side -->
+    <div class="grid-2">
+      <!-- Card 1: Traffic Surge Patterns (moved from bottom-left) -->
+      <div class="card">
+        <h2 style="color:#FFF; font-size:20px; font-weight:700; margin:0 0 20px 0; letter-spacing:-0.3px;">Traffic Surge
+          Patterns</h2>
+
+        <!-- Day Tabs -->
+        <div id="day-tabs" style="display:flex; gap:8px; margin:20px 0;">
+          <!-- Day tabs will be rendered here -->
+        </div>
+
+        <!-- Peak Time Label -->
+        <div id="peak-label" style="margin-bottom:20px; min-height:24px;">
+          <!-- Dynamic label will appear here -->
+        </div>
+
+        <!-- Bar Chart -->
+        <div id="popular-times-chart" style="position:relative; height:160px; margin-bottom:20px;">
+          <!-- Chart will be rendered here -->
+        </div>
+      </div>
+
+      <!-- Card 2: Popular Items -->
+      <div class="card">
+        <h2 style="color:#FFF; font-size:20px; font-weight:700; margin:0 0 20px 0; letter-spacing:-0.3px;">Popular Items
+        </h2>
+        <div id="top-sellers" style="display:flex; flex-direction:column; gap:12px;">
+          <!-- Top sellers will be rendered here -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Bottom Row: 2 Cards Side by Side -->
+    <div class="grid-2 mt-24">
+      <!-- Card 3: Recent Daily Sales (moved from top-left) -->
+      <div class="card" style="display:flex; flex-direction:column;">
+        <h2 style="color:#FFF; font-size:20px; font-weight:700; margin:0 0 20px 0; letter-spacing:-0.3px;">Dynamic
+          Pricing Recommendations</h2>
+        <div id="pricing-recommendations" style="flex:1; display:flex; flex-direction:column; overflow:hidden;">
+          <!-- Recommendations will be rendered here -->
+        </div>
+      </div>
+
+      <!-- Card 4: Dynamic Pricing Recommendations -->
+      <div class="card">
+        <h2 style="color:#FFF; font-size:20px; font-weight:700; margin:0 0 20px 0; letter-spacing:-0.3px;">Recent Daily
+          Sales</h2>
+        <div id="sales-history" style="display:flex; flex-direction:column; gap:12px;">
+          <!-- Sales history will be rendered here -->
+        </div>
+      </div>
+    </div>
+
+    <div class="page-footer"
+      style="margin-top:40px; padding:20px 0 10px 0; border-top:1px solid #D1D1D6; text-align:center;">
+      <div style="font-size:24px; font-weight:600; margin-bottom:12px; color:#1D1D1F; letter-spacing:-0.5px;">
+        Stockd</div>
+      <div
+        style="color:#86868B; font-size:12px; margin:0 auto; line-height:1.4; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+        Smart inventory management for modern kitchens. Powered using Gemini & Supabase.
+      </div>
+      <div
+        style="color:#86868B; font-size:12px; margin-top:4px; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+        Designed in Athens, GA.
+      </div>
+      <div style="margin-top:16px; display:flex; justify-content:center; gap:24px; font-size:12px;">
+        <a href="#" style="color:#6E6E73; text-decoration:none;">Privacy Policy</a>
+        <a href="#" style="color:#6E6E73; text-decoration:none;">Terms of Use</a>
+        <a href="#" style="color:#6E6E73; text-decoration:none;">Global Support</a>
+      </div>
+      <div style="margin-top:16px; color:#86868B; font-size:11px;">
+        Copyright © 2026 Stockd Inc. All rights reserved.
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="../js/env.js"></script>
+  <script src="../js/supabase-client.js"></script>
+  <script src="../js/config.js"></script>
+  <script src="../js/gemini-client.js"></script>
+  <script src="../js/ai-copilot.js"></script>
+  <script src="../js/animated-counter.js"></script>
+  <script>
+    function go(page) { window.location.href = page + '.html'; }
+
+    let salesData = [];
+    let orderData = [];
+    let selectedDay = new Date().getDay();
+
+    const dayNames = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+    const fullDayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+    (async () => {
+      const session = await requireAuth('../login.html');
+      if (!session) return;
+
+      // Render static UI immediately
+      renderDayTabs();
+
+      // Start fetching data in parallel (don't block UI)
+      loadData();
+    })();
+
+    async function loadData() {
+      // Load Traffic Data independently to show it fast
+      loadOrderData().then(() => renderPopularTimes());
+
+      // Load other components in parallel
+      fetchPricingRecommendations();
+      loadTopSellers();
+      fetchRecentDailySales();
+    }
+
+    async function fetchPricingRecommendations() {
+      const container = document.getElementById('pricing-recommendations');
+
+      // Show loading state
+      container.innerHTML = `
+        <div style="padding:40px; text-align:center; color:#8E8E93;">
+          <div class="spinner" style="border:3px solid #3A3A3C; border-top:3px solid #007AFF; border-radius:50%; width:24px; height:24px; animation:spin 1s linear infinite; margin:0 auto 16px;"></div>
+          <div>Analyzing pricing opportunities...</div>
+        </div>
+        <style>@keyframes spin {0% {transform: rotate(0deg);} 100% {transform: rotate(360deg);}}</style>
+      `;
+
+      try {
+        const today = new Date();
+        const sevenDaysAgo = new Date(today);
+        sevenDaysAgo.setDate(today.getDate() - 7);
+
+        const startDate = sevenDaysAgo.toISOString().split('T')[0];
+        const endDate = today.toISOString().split('T')[0];
+
+        // Query sales data grouped by menu item for past 7 days
+        const { data: salesByItem, error } = await sb
+          .from('sales_line_items')
+          .select(`
+            menu_item_id,
+            menu_items!inner (
+              id,
+              name,
+              category
+            ),
+            qty,
+            net_sales
+          `)
+          .gte('business_date', startDate)
+          .lte('business_date', endDate);
+
+        if (error) throw error;
+
+        // Group and analyze by menu item
+        const itemPerformance = aggregateItemPerformance(salesByItem || []);
+
+        // Generate recommendations
+        let recommendations = null;
+
+        // Try AI generation first
+        try {
+          renderSkeletonLoading(); // Show skeleton state while AI thinks
+          recommendations = await generateAIPricingInsights(itemPerformance);
+        } catch (err) {
+          console.warn('AI pricing generation failed, falling back to rules:', err);
+        }
+
+        // Fallback to rule-based if AI fails or returns empty
+        if (!recommendations || recommendations.length === 0) {
+          console.log('Using rule-based pricing recommendations');
+          recommendations = generatePricingRecommendations(itemPerformance);
+        }
+
+        // Render
+        renderPricingRecommendations(recommendations.slice(0, 5));
+
+      } catch (error) {
+        console.error('Error fetching pricing recommendations:', error);
+        container.innerHTML = `
+          <div style="padding:20px; text-align:center; color:#FF453A;">
+            <div style="font-size:24px; margin-bottom:8px;">⚠️</div>
+            <div>Unable to load recommendations</div>
+            <div style="font-size:12px; margin-top:4px; opacity:0.7;">${error.message}</div>
+            <button onclick="fetchPricingRecommendations()" style="margin-top:12px; background:#3A3A3C; border:none; color:#FFF; padding:6px 12px; border-radius:6px; font-size:12px; cursor:pointer;">Retry</button>
+          </div>
+        `;
+      }
+    }
+
+    function aggregateItemPerformance(salesData) {
+      const itemMap = new Map();
+
+      salesData.forEach(sale => {
+        const itemId = sale.menu_item_id;
+        const item = sale.menu_items;
+
+        if (!item) return; // Skip if menu item data missing
+
+        if (!itemMap.has(itemId)) {
+          itemMap.set(itemId, {
+            id: itemId,
+            name: item.name,
+            category: item.category || 'Other',
+            totalQuantity: 0,
+            totalRevenue: 0,
+            orderCount: 0 // Sales line items doesn't give us order count directly, using txn count as proxy
+          });
+        }
+
+        const itemData = itemMap.get(itemId);
+        itemData.totalQuantity += sale.qty || 0;
+        itemData.totalRevenue += parseFloat(sale.net_sales) || 0;
+        itemData.orderCount += 1;
+      });
+
+      return Array.from(itemMap.values()).map(item => {
+        // Calculate derived price
+        item.currentPrice = item.totalQuantity > 0
+          ? item.totalRevenue / item.totalQuantity
+          : 0;
+        return item;
+      });
+    }
+
+    function generatePricingRecommendations(itemPerformance) {
+      if (itemPerformance.length === 0) return [];
+
+      const recommendations = [];
+
+      // Calculate overall averages for comparison
+      const avgQuantity = itemPerformance.reduce((sum, item) => sum + item.totalQuantity, 0) / itemPerformance.length;
+      const avgRevenue = itemPerformance.reduce((sum, item) => sum + item.totalRevenue, 0) / itemPerformance.length;
+      const avgPrice = itemPerformance.reduce((sum, item) => sum + item.currentPrice, 0) / itemPerformance.length;
+
+      itemPerformance.forEach(item => {
+        const rec = {
+          itemId: item.id,
+          itemName: item.name,
+          category: item.category,
+          currentPrice: item.currentPrice,
+          suggestedPrice: item.currentPrice,
+          priceChange: 0,
+          percentChange: 0,
+          action: 'hold', // 'increase', 'decrease', 'hold'
+          actionIcon: '=',
+          reason: '',
+          confidence: 'medium', // 'high', 'medium', 'low'
+          risk: 'medium', // 'low', 'medium', 'high'
+          metrics: {
+            unitsSold: item.totalQuantity,
+            revenue: item.totalRevenue,
+            orders: item.orderCount
+          }
+        };
+
+        // High demand + Strong revenue = Consider increase
+        if (item.totalQuantity > avgQuantity * 1.3 && item.totalRevenue > avgRevenue * 1.2) {
+          rec.action = 'increase';
+          rec.actionIcon = '↗️';
+          rec.priceChange = Math.round(item.currentPrice * 0.05 * 100) / 100; // 5% increase
+          rec.percentChange = 5;
+          rec.suggestedPrice = item.currentPrice + rec.priceChange;
+          rec.reason = 'High demand, low price sensitivity';
+          rec.confidence = 'high';
+          rec.risk = 'low';
+        }
+
+        // High demand + Below average price = Underpriced
+        else if (item.totalQuantity > avgQuantity * 1.5 && item.currentPrice < avgPrice * 0.8) {
+          rec.action = 'increase';
+          rec.actionIcon = '↗️';
+          rec.priceChange = Math.round(item.currentPrice * 0.10 * 100) / 100; // 10% increase
+          rec.percentChange = 10;
+          rec.suggestedPrice = item.currentPrice + rec.priceChange;
+          rec.reason = 'Popular item priced below market';
+          rec.confidence = 'high';
+          rec.risk = 'low';
+        }
+
+        // Low demand + High price = Overpriced
+        else if (item.totalQuantity < avgQuantity * 0.5 && item.currentPrice > avgPrice * 1.2) {
+          rec.action = 'decrease';
+          rec.actionIcon = '↘️';
+          rec.priceChange = -Math.round(item.currentPrice * 0.10 * 100) / 100; // 10% decrease
+          rec.percentChange = -10;
+          rec.suggestedPrice = item.currentPrice + rec.priceChange;
+          rec.reason = 'Low conversion - test lower price point';
+          rec.confidence = 'medium';
+          rec.risk = 'medium';
+        }
+
+        // Very low demand = Investigate
+        else if (item.totalQuantity < 10 && item.orderCount < 5) {
+          rec.action = 'decrease';
+          rec.actionIcon = '↘️';
+          rec.priceChange = -Math.round(item.currentPrice * 0.15 * 100) / 100; // 15% decrease
+          rec.percentChange = -15;
+          rec.suggestedPrice = item.currentPrice + rec.priceChange;
+          rec.reason = 'Very low sales - significant adjustment needed';
+          rec.confidence = 'low';
+          rec.risk = 'high';
+        }
+
+        // Stable performance = Hold
+        else {
+          rec.action = 'hold';
+          rec.actionIcon = '=';
+          rec.reason = 'Stable performance - maintain pricing';
+          rec.confidence = 'high';
+          rec.risk = 'low';
+        }
+
+        recommendations.push(rec);
+      });
+
+      // Sort by impact (prioritize high-revenue items with opportunities)
+      recommendations.sort((a, b) => {
+        // Prioritize increase opportunities on high-revenue items
+        if (a.action === 'increase' && b.action !== 'increase') return -1;
+        if (b.action === 'increase' && a.action !== 'increase') return 1;
+
+        // Then sort by revenue descending
+        return b.metrics.revenue - a.metrics.revenue;
+      });
+
+      return recommendations;
+    }
+
+    function renderPricingRecommendations(recommendations) {
+      const container = document.getElementById('pricing-recommendations');
+
+      if (recommendations.length === 0) {
+        container.innerHTML = `
+          <div style="padding:30px; text-align:center; color:#8E8E93;">
+            <div style="font-size:32px; margin-bottom:12px;">📊</div>
+            <p>Not enough sales data for pricing analysis</p>
+            <p style="font-size:12px; margin-top:8px;">Recommendations will appear after 7 days</p>
+          </div>
+        `;
+        return;
+      }
+
+      const cautionBanner = `
+        <div style="background:#FEF3C7; border:1px solid #F59E0B; border-radius:12px; padding:16px; margin-bottom:20px; display:flex; gap:12px;">
+          <div style="font-size:20px;">⚠️</div>
+          <div>
+            <div style="font-weight:700; font-size:13px; color:#92400E; margin-bottom:4px;">PRICING CAUTION</div>
+            <div style="font-size:12px; color:#78350F; line-height:1.4;">
+              Sudden changes can impact customer loyalty. We recommend gradual adjustments.
+            </div>
+          </div>
+        </div>
+      `;
+
+      const listHtml = recommendations.map(rec => {
+        const actionColors = {
+          increase: { bg: '#064E3B', text: '#D1FAE5', border: '#10B981' }, // Darker green bg for dark mode
+          decrease: { bg: '#7F1D1D', text: '#FEE2E2', border: '#EF4444' }, // Darker red bg for dark mode
+          hold: { bg: '#374151', text: '#F3F4F6', border: '#9CA3AF' }
+        };
+        const colors = actionColors[rec.action];
+        const riskColor = rec.risk === 'low' ? '#10B981' : rec.risk === 'medium' ? '#F59E0B' : '#EF4444';
+
+        const categoryEmojis = {
+          'Pizza': '🍕', 'Salad': '🥗', 'Pasta': '🍝',
+          'Appetizer': '🥟', 'Dessert': '🍰', 'Beverage': '🥤', 'Other': '🍽️'
+        };
+        const emoji = categoryEmojis[rec.category] || '🍽️';
+
+        return `
+          <div style="background:#2C2C2E; border-radius:10px; padding:16px; margin-bottom:12px; border-left:4px solid ${colors.border};">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+              <div style="display:flex; align-items:center; gap:8px;">
+                <span style="font-size:18px;">${emoji}</span>
+                <span style="font-weight:600; font-size:15px; color:#FFF;">${rec.itemName}</span>
+              </div>
+              <div style="background:${colors.bg}; color:${colors.text}; padding:4px 10px; border-radius:6px; font-size:12px; font-weight:600;">
+                ${rec.actionIcon} ${rec.action === 'hold' ? 'Hold' : (rec.percentChange > 0 ? '+' : '') + rec.percentChange + '%'}
+              </div>
+            </div>
+            
+            <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px; font-size:14px;">
+              <span style="color:#9CA3AF; font-size:12px;">Current:</span>
+              <span style="font-weight:700; color:#FFF;">$${rec.currentPrice.toFixed(2)}</span>
+              <span style="color:#6B7280;">→</span>
+              <span style="color:#9CA3AF; font-size:12px;">Suggested:</span>
+              <span style="font-weight:700; color:#FFF;">$${rec.suggestedPrice.toFixed(2)}</span>
+            </div>
+            
+            <div style="font-size:13px; color:#D1D5DB; margin-bottom:10px; line-height:1.4;">${rec.reason}</div>
+            
+            <div style="display:flex; gap:12px; font-size:12px; color:#9CA3AF; margin-bottom:10px;">
+              <span>${Math.round(rec.metrics.unitsSold)} sold</span>
+              <span>•</span>
+              <span>$${rec.metrics.revenue.toFixed(0)} revenue</span>
+            </div>
+            
+            <div style="display:flex; justify-content:space-between; font-size:11px; text-transform:capitalize;">
+              <span style="color:#9CA3AF;">Confidence: ${rec.confidence}</span>
+              <span style="color:${riskColor}; font-weight:600;">Risk: ${rec.risk}</span>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      container.innerHTML = `
+        ${cautionBanner}
+        <div style="font-size:12px; color:#9CA3AF; margin-bottom:12px; text-transform:uppercase; letter-spacing:0.5px;">Based on 7-day sales analysis</div>
+        <div style="flex:1; overflow-y: auto; padding-right: 4px; min-height:0;">
+            ${listHtml}
+        </div>
+        ${recommendations.length > 5 ? '<button style="width:100%; padding:10px; background:transparent; border:1px solid #3A3A3C; color:#8E8E93; border-radius:8px; margin-top:8px; font-size:13px; cursor:pointer;">View All Recommendations</button>' : ''}
+      `;
+    }
+
+    function renderSkeletonLoading() {
+      const container = document.getElementById('pricing-recommendations');
+      const skeletonCard = `
+        <div style="background:#2C2C2E; border-radius:10px; padding:16px; margin-bottom:12px; opacity:0.6; animation:pulse 1.5s infinite;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+            <div style="height:20px; width:150px; background:#3A3A3C; border-radius:4px;"></div>
+            <div style="height:20px; width:60px; background:#3A3A3C; border-radius:4px;"></div>
+          </div>
+          <div style="height:16px; width:100%; background:#3A3A3C; border-radius:4px; margin-bottom:10px;"></div>
+          <div style="display:flex; gap:12px;">
+            <div style="height:12px; width:80px; background:#3A3A3C; border-radius:4px;"></div>
+            <div style="height:12px; width:80px; background:#3A3A3C; border-radius:4px;"></div>
+          </div>
+        </div>
+      `;
+
+      container.innerHTML = `
+        <div style="background:#FEF3C7; border:1px solid #F59E0B; border-radius:12px; padding:16px; margin-bottom:20px; display:flex; gap:12px; opacity:0.5;">
+           <div style="height:20px; width:20px; background:#FCD34D; border-radius:50%;"></div>
+           <div style="flex:1;">
+             <div style="height:14px; width:120px; background:#FCD34D; border-radius:4px; margin-bottom:6px;"></div>
+             <div style="height:12px; width:90%; background:#FCD34D; border-radius:4px;"></div>
+           </div>
+        </div>
+        <div style="margin-bottom:12px; display:flex; align-items:center; gap:8px;">
+           <div class="spinner" style="border:2px solid #3A3A3C; border-top:2px solid #007AFF; border-radius:50%; width:14px; height:14px; animation:spin 1s linear infinite;"></div>
+           <span style="font-size:12px; color:#007AFF;">Consulting Gemini AI...</span>
+        </div>
+        <style>
+          @keyframes pulse { 0% { opacity: 0.6; } 50% { opacity: 0.3; } 100% { opacity: 0.6; } }
+          @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        </style>
+        ${skeletonCard}
+        ${skeletonCard}
+        ${skeletonCard}
+      `;
+    }
+
+    function updateLoadingMessage(msg) {
+      const container = document.getElementById('pricing-recommendations');
+      if (container && container.innerText.includes('Analyzing')) {
+        const textDiv = container.querySelector('div:nth-child(2)');
+        if (textDiv) textDiv.textContent = msg;
+      }
+    }
+
+    async function generateAIPricingInsights(itemPerformance) {
+      if (typeof GeminiChat === 'undefined') return null;
+
+      const ai = new GeminiChat();
+
+      // Prepare concise data for AI
+      const validItems = itemPerformance.filter(i => i.totalQuantity > 0);
+      if (validItems.length === 0) return null;
+
+      const summaryData = validItems.map(i => ({
+        id: i.id,
+        name: i.name,
+        category: i.category,
+        price: Number(i.currentPrice.toFixed(2)),
+        qty: i.totalQuantity,
+        rev: Math.round(i.totalRevenue)
+      })).sort((a, b) => b.rev - a.rev).slice(0, 15); // Send top 15 items to save tokens
+
+      const prompt = `
+        Analyze these menu items (last 7 days sales) and recommend pricing changes to maximize revenue.
+        
+        Return a JSON array ONLY (no markdown, no explanations outside JSON) with objects:
+        {
+          "itemId": "id from data",
+          "action": "increase" | "decrease" | "hold",
+          "newPrice": number,
+          "reason": "short explanation (max 10 words)"
+        }
+        
+        Rules:
+        - Suggest "increase" (3-10%) for high volume/revenue items.
+        - Suggest "decrease" (5-15%) for low volume items.
+        - Suggest "hold" for stable items.
+        - Be aggressive but realistic.
+        
+        Data: ${JSON.stringify(summaryData)}
+      `;
+
+      try {
+        const response = await ai.sendMessage(prompt);
+        const text = (response.text || '').replace(/```json/g, '').replace(/```/g, '').trim();
+
+        const aiRecs = JSON.parse(text);
+        if (!Array.isArray(aiRecs)) return null;
+
+        return aiRecs.map(rec => {
+          const original = itemPerformance.find(i => i.id === rec.itemId);
+          if (!original) return null;
+
+          const priceChange = rec.newPrice - original.currentPrice;
+          const percentChange = original.currentPrice > 0 ? (priceChange / original.currentPrice) * 100 : 0;
+
+          return {
+            itemId: original.id,
+            itemName: original.name,
+            category: original.category,
+            currentPrice: original.currentPrice,
+            suggestedPrice: rec.newPrice,
+            priceChange: Number(priceChange.toFixed(2)),
+            percentChange: Math.round(percentChange),
+            action: rec.action,
+            actionIcon: rec.action === 'increase' ? '↗️' : rec.action === 'decrease' ? '↘️' : '=',
+            reason: '🤖 ' + rec.reason,
+            confidence: 'high',
+            risk: Math.abs(percentChange) > 15 ? 'high' : 'low',
+            metrics: {
+              unitsSold: original.totalQuantity,
+              revenue: original.totalRevenue,
+              orders: original.orderCount
+            }
+          };
+        }).filter(Boolean);
+      } catch (e) {
+        console.error('Failed to parse AI response:', e);
+        return null;
+      }
+    }
+
+    async function loadTopSellers() {
+      // Get all sales aggregated by menu item
+      const { data, error } = await sb
+        .from('sales_line_items')
+        .select('menu_item_id, menu_items(name, category), qty, net_sales');
+
+      if (error || !data || data.length === 0) {
+        // Use demo data for pizza place
+        const demoItems = [
+          { name: 'Pepperoni Pizza', qty: 342 },
+          { name: 'Margherita Pizza', qty: 298 },
+          { name: 'BBQ Chicken Pizza', qty: 267 },
+          { name: 'Veggie Supreme', qty: 189 },
+          { name: 'Buffalo Wings', qty: 156 }
+        ];
+
+        const maxQty = demoItems[0].qty;
+
+        document.getElementById('top-sellers').innerHTML = demoItems.map((item, idx) => {
+          const percentage = (item.qty / maxQty * 100);
+          return `
+          <div style="display:flex; align-items:center; gap:12px;">
+            <div style="color:#8E8E93; font-size:18px; font-weight:700; width:24px; text-align:center;">#${idx + 1}</div>
+            <div style="flex:1;">
+              <div style="color:#FFF; font-size:15px; font-weight:600; margin-bottom:4px;">${item.name}</div>
+              <div style="display:flex; align-items:center; gap:8px;">
+                <div style="flex:1; height:6px; background:#2C2C2E; border-radius:3px; overflow:hidden;">
+                  <div style="height:100%; width:${percentage}%; background:linear-gradient(90deg, #30D158 0%, #34C759 100%); border-radius:3px;"></div>
+                </div>
+                <div style="color:#AEAEB2; font-size:13px; font-weight:600; min-width:60px; text-align:right;">${Math.round(item.qty)} sold</div>
+              </div>
+            </div>
+          </div>
+        `;
+        }).join('');
+        return;
+      }
+
+      // Aggregate by menu item
+      const itemStats = {};
+      data.forEach(row => {
+        const id = row.menu_item_id;
+        const name = row.menu_items?.name || 'Unknown Item';
+        if (!itemStats[id]) {
+          itemStats[id] = { id, name, qty: 0, revenue: 0 };
+        }
+        itemStats[id].qty += row.qty;
+        itemStats[id].revenue += row.net_sales;
+      });
+
+      // Sort and get top 5
+      const topItems = Object.values(itemStats)
+        .sort((a, b) => b.qty - a.qty)
+        .slice(0, 5);
+
+      const maxQty = topItems[0]?.qty || 1;
+
+      document.getElementById('top-sellers').innerHTML = topItems.map((item, idx) => {
+        const percentage = (item.qty / maxQty * 100);
+        return `
+          <div style="display:flex; align-items:center; gap:12px;">
+            <div style="color:#8E8E93; font-size:18px; font-weight:700; width:24px; text-align:center;">#${idx + 1}</div>
+            <div style="flex:1;">
+              <div style="color:#FFF; font-size:15px; font-weight:600; margin-bottom:4px;">${item.name}</div>
+              <div style="display:flex; align-items:center; gap:8px;">
+                <div style="flex:1; height:6px; background:#2C2C2E; border-radius:3px; overflow:hidden;">
+                  <div style="height:100%; width:${percentage}%; background:linear-gradient(90deg, #30D158 0%, #34C759 100%); border-radius:3px;"></div>
+                </div>
+                <div style="color:#AEAEB2; font-size:13px; font-weight:600; min-width:60px; text-align:right;">${Math.round(item.qty)} sold</div>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    async function fetchRecentDailySales() {
+      const container = document.getElementById('sales-history');
+
+      // Show loading state
+      container.innerHTML = `
+        <div style="padding:40px; text-align:center; color:#8E8E93;">
+          <div class="spinner" style="border:3px solid #3A3A3C; border-top:3px solid #007AFF; border-radius:50%; width:24px; height:24px; animation:spin 1s linear infinite; margin:0 auto 16px;"></div>
+          <div>Loading sales data...</div>
+        </div>
+        <style>@keyframes spin {0% {transform: rotate(0deg);} 100% {transform: rotate(360deg);}}</style>
+      `;
+
+      try {
+        const today = new Date();
+        const days = [];
+        const dateMap = {};
+
+        // Generate last 7 days (Today -> 7 days ago) using LOCAL time
+        // to match business dates correctly
+        for (let i = 0; i < 7; i++) {
+          const d = new Date(today);
+          d.setDate(d.getDate() - i); // Corrected to use 'd' instead of 'today' for consistent date calculation
+          // Use 'en-CA' for YYYY-MM-DD format in local timezone
+          const dateStr = d.toLocaleDateString('en-CA');
+          days.push(dateStr);
+          dateMap[dateStr] = {
+            date: dateStr,
+            dateObj: d,
+            revenue: 0,
+            orders: 0,
+            items: 0
+          };
+        }
+
+        const startDate = days[6]; // Oldest date
+        const endDate = days[0];   // Newest date (Today)
+
+        // DIRECT QUERY STRATEGY
+        // The get_revenue_trend RPC uses MAX(business_date), which is picking up bad test data from year 9999.
+        // To ensure we show THIS week's data, we query directly with strict date filters.
+        const { data: orders, error } = await sb
+          .from('daily_orders')
+          .select('business_date, subtotal, num_guests')
+          .gte('business_date', startDate)
+          .lte('business_date', endDate)
+          .eq('voided', false);
+
+        if (error) {
+          console.error('Error querying daily_orders:', error);
+          throw error;
+        }
+
+        // Aggregate data
+        if (orders) {
+          orders.forEach(order => {
+            const dateStr = order.business_date;
+            if (dateMap[dateStr]) {
+              dateMap[dateStr].revenue += (order.subtotal || 0);
+              dateMap[dateStr].orders += 1;
+              // daily_orders mostly tracks revenue/guests, items not available
+            }
+          });
+        }
+
+        // Convert map back to array (days array preserves sort order)
+        const salesData = days.map(dateStr => dateMap[dateStr]);
+
+        // Calculate Max Revenue for Progress Bars
+        const maxRevenue = Math.max(...salesData.map(d => d.revenue), 1);
+        const totalRev = salesData.reduce((sum, d) => sum + d.revenue, 0);
+
+        // Render
+        const listHtml = salesData.map((dayData, idx) => {
+          const isToday = idx === 0;
+
+          const dayOfWeek = dayData.dateObj.toLocaleDateString('en-US', { weekday: 'short' });
+          const monthDay = dayData.dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+          let progressWidth = (dayData.revenue / maxRevenue) * 100;
+          // Ensure non-zero revenue has at least 2% width so it's visible
+          if (dayData.revenue > 0) {
+            progressWidth = Math.max(progressWidth, 2);
+          }
+          progressWidth = Math.min(progressWidth, 100);
+
+          const revenueFormatted = new Intl.NumberFormat('en-US', {
+            style: 'currency',
+            currency: 'USD',
+            minimumFractionDigits: 2
+          }).format(dayData.revenue);
+
+          return `
+            <div style="padding:12px 16px; background:${isToday ? '#2C2C2E' : 'transparent'}; border-radius:10px; border:${isToday ? '1px solid #3A3A3C' : '1px solid transparent'};">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                <div style="display:flex; align-items:center; gap:8px;">
+                  <div style="color:#FFF; font-size:15px; font-weight:600;">${dayOfWeek}</div>
+                  <div style="color:#8E8E93; font-size:13px;">${monthDay}</div>
+                  ${isToday ? '<div style="background:#30D158; color:#000; font-size:10px; font-weight:700; padding:2px 6px; border-radius:4px; text-transform:uppercase;">TODAY</div>' : ''}
+                </div>
+                <div style="color:#FFF; font-size:16px; font-weight:700;">${revenueFormatted}</div>
+              </div>
+              <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
+                <div style="flex:1; height:4px; background:#1C1C1E; border-radius:2px; overflow:hidden;">
+                  <div style="height:100%; width:${progressWidth}%; background:#30D158; border-radius:2px; transition: width 1s ease-out;"></div>
+                </div>
+              </div>
+              <div style="display:flex; gap:16px; color:#8E8E93; font-size:12px;">
+                <span>${dayData.orders} orders</span>
+              </div>
+            </div>
+          `;
+        }).join('');
+
+        container.innerHTML = listHtml;
+
+      } catch (error) {
+        console.error('Error in fetchRecentDailySales:', error);
+        container.innerHTML = `
+            <div style="padding:20px; text-align:center; color:#FF453A;">
+                <div style="font-size:24px; margin-bottom:8px;">⚠️</div>
+                <div>Unable to load sales data</div>
+                <div style="font-size:12px; margin-top:4px; opacity:0.7;">${error.message}</div>
+                <button onclick="fetchRecentDailySales()" style="margin-top:12px; background:#3A3A3C; border:none; color:#FFF; padding:6px 12px; border-radius:6px; font-size:12px; cursor:pointer;">Retry</button>
+            </div>
+        `;
+      }
+    }
+
+    async function loadOrderData() {
+      // Get order data with timestamps
+      const { data, error } = await sb
+        .from('daily_orders')
+        .select('order_time, order_hour');
+
+      if (error) {
+        console.error('Error loading order data:', error);
+      }
+
+      if (!data || data.length === 0) {
+        console.warn('No order data found - using demo data for pizza place');
+        orderData = generateDemoData();
+        return;
+      }
+
+      console.log('Loaded order data:', data.length, 'orders');
+      orderData = data;
+    }
+
+    // Generate realistic demo data for a pizza place with UNIQUE patterns per day
+    function generateDemoData() {
+      const demoOrders = [];
+      const now = new Date();
+
+      // Unique hourly patterns for each day of the week
+      // Format: { hour: orderCount }
+      const dailyPatterns = {
+        0: { // SUNDAY - Family dinner day, moderate brunch
+          9: 3, 10: 8, 11: 15, 12: 28, 13: 22, 14: 12,
+          15: 6, 16: 10, 17: 22,
+          18: 45, 19: 52, 20: 42, 21: 28, // Peak at 7PM
+          22: 15, 23: 8, 0: 4
+        },
+        1: { // MONDAY - Slowest day, light lunch, moderate dinner
+          9: 2, 10: 3, 11: 8, 12: 22, 13: 18, 14: 10,
+          15: 5, 16: 7, 17: 14,
+          18: 32, 19: 28, 20: 22, 21: 15, // Peak at 6PM
+          22: 8, 23: 4, 0: 2
+        },
+        2: { // TUESDAY - Slightly busier than Monday
+          9: 2, 10: 4, 11: 10, 12: 25, 13: 20, 14: 12,
+          15: 6, 16: 8, 17: 16,
+          18: 35, 19: 38, 20: 30, 21: 18, // Peak at 7PM
+          22: 10, 23: 5, 0: 2
+        },
+        3: { // WEDNESDAY - Mid-week bump
+          9: 3, 10: 5, 11: 12, 12: 30, 13: 25, 14: 15,
+          15: 8, 16: 10, 17: 20,
+          18: 40, 19: 45, 20: 35, 21: 22, // Peak at 7PM
+          22: 12, 23: 6, 0: 3
+        },
+        4: { // THURSDAY - Pre-weekend surge
+          9: 3, 10: 6, 11: 14, 12: 32, 13: 28, 14: 16,
+          15: 9, 16: 12, 17: 25,
+          18: 42, 19: 48, 20: 52, 21: 38, // Peak at 8PM
+          22: 22, 23: 12, 0: 5
+        },
+        5: { // FRIDAY - Busiest night
+          9: 4, 10: 8, 11: 16, 12: 35, 13: 30, 14: 18,
+          15: 12, 16: 18, 17: 32,
+          18: 55, 19: 62, 20: 68, 21: 55, // Peak at 8PM - highest!
+          22: 35, 23: 20, 0: 10
+        },
+        6: { // SATURDAY - Weekend peak, strong brunch
+          9: 8, 10: 18, 11: 28, 12: 35, 13: 30, 14: 22, // Strong brunch
+          15: 15, 16: 20, 17: 35,
+          18: 58, 19: 65, 20: 55, 21: 42, // Peak at 7PM
+          22: 28, 23: 15, 0: 8
+        }
+      };
+
+      for (let i = 0; i < 7; i++) {
+        const d = new Date(now);
+        d.setDate(d.getDate() - i);
+        const dayOfWeek = d.getDay();
+        const pattern = dailyPatterns[dayOfWeek];
+
+        // Generate orders for each hour based on pattern
+        for (let hour = 9; hour <= 23; hour++) {
+          const count = pattern[hour] || 0;
+          // Add some randomness +/- 20%
+          const actualCount = Math.max(0, Math.round(count * (0.8 + Math.random() * 0.4)));
+
+          for (let k = 0; k < actualCount; k++) {
+            // Random minute
+            const minute = Math.floor(Math.random() * 60);
+            const orderTime = new Date(d);
+            orderTime.setHours(hour, minute, 0, 0);
+
+            // Removed future check to show full day pattern
+            // if (d.getDate() === now.getDate() && orderTime > now) continue;
+
+            demoOrders.push({
+              order_time: orderTime.toISOString(),
+              order_hour: hour
+            });
+          }
+        }
+      }
+
+      return demoOrders;
+    }
+
+    function renderDayTabs() {
+      const container = document.getElementById('day-tabs');
+      const today = new Date().getDay();
+
+      container.innerHTML = dayNames.map((d, i) => {
+        // Reorder to start with Today, then previous days?
+        // Or standard Sun-Sat? Let's do standard Sun-Sat for "Popular Times"
+        // But popular times usually shows "Today" selected by default.
+        const dayIndex = i;
+        const isActive = dayIndex === selectedDay;
+
+        return `
+          <button onclick="selectDay(${dayIndex})" 
+            style="flex:1; padding:8px 0; border:none; background:${isActive ? '#007AFF' : '#2C2C2E'}; color:${isActive ? '#FFF' : '#8E8E93'}; border-radius:8px; cursor:pointer; font-weight:600; font-size:13px; transition:all 0.2s;">
+            ${d}
+          </button>
+        `;
+      }).join('');
+
+      renderPopularTimes();
+    }
+
+    function selectDay(dayIndex) {
+      selectedDay = dayIndex;
+      renderDayTabs();
+      renderPopularTimes();
+    }
+
+    function renderPopularTimes() {
+      // Calculate busy data based on orderData
+      // If no orderData (still loading), show skeleton? 
+      // Assuming orderData is populated or demo data used
+      // Filter orders by selected day of week
+      const relevantOrders = orderData.filter(o => {
+        const d = new Date(o.order_time);
+        return d.getDay() === selectedDay;
+      });
+
+      // Group by hour
+      const hourlyCounts = new Array(24).fill(0);
+      relevantOrders.forEach(o => {
+        const h = new Date(o.order_time).getHours();
+        hourlyCounts[h]++;
+      });
+
+      // Find global max to scale bars (across all days or just this day?)
+      // Google Maps typically scales relative to the week's peak.
+      // Let's find max for THIS day for simplicity, or hardcode a "busy" threshold.
+      const maxCount = Math.max(...hourlyCounts, 1);
+
+      // Description logic
+      const currentHour = new Date().getHours();
+      const isToday = selectedDay === new Date().getDay();
+      const currentLoad = hourlyCounts[currentHour] || 0;
+
+      let labelText = '';
+      if (isToday) {
+        if (currentLoad > maxCount * 0.8) labelText = 'Very busy right now';
+        else if (currentLoad > maxCount * 0.5) labelText = 'Moderately busy';
+        else labelText = 'Not too busy';
+      } else {
+        // Find peak hour for this day
+        const peakHour = hourlyCounts.indexOf(maxCount);
+        const ampm = peakHour >= 12 ? 'PM' : 'AM';
+        const displayComp = peakHour > 12 ? peakHour - 12 : (peakHour === 0 ? 12 : peakHour);
+        labelText = `Usually busiest around ${displayComp} ${ampm}`;
+      }
+
+      document.getElementById('peak-label').innerHTML = `
+        <div style="color:#8E8E93; font-size:13px; font-weight:500;">${labelText}</div>
+      `;
+
+      // Render Chart
+      // Fixed height 160px.
+      const chartHtml = hourlyCounts.map((count, hour) => {
+        if (hour < 6) return ''; // Skip early morning to map 6AM - 3AM range or similar? 
+        // Showing 6AM to Midnight? Or 24h?
+        // Let's show 9AM to 11PM (14 bars) to fit
+        if (hour < 9) return '';
+
+        const heightPct = (count / maxCount) * 100;
+        const isCurrentHour = isToday && hour === currentHour;
+
+        // Hour label every 3 hours
+        const showLabel = (hour - 9) % 3 === 0;
+        const ampm = hour >= 12 ? 'PM' : 'AM';
+        const displayHour = hour > 12 ? hour - 12 : (hour === 0 ? 12 : hour);
+
+        return `
+          <div style="flex:1; display:flex; flex-direction:column; justify-content:flex-end; align-items:center; gap:6px;">
+            <div style="width:100%; height:100px; display:flex; align-items:flex-end; justify-content:center;">
+              <div style="width:60%; height:${Math.max(heightPct, 4)}%; background:${isCurrentHour ? '#007AFF' : '#545458'}; border-radius:4px; transition:height 0.3s ease;"></div>
+            </div>
+            <div style="height:14px; font-size:10px; color:#8E8E93;">
+              ${showLabel ? displayHour + ampm : ''}
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      document.getElementById('popular-times-chart').innerHTML = `
+        <div style="display:flex; height:100%; align-items:flex-end; padding:0 10px;">
+          ${chartHtml}
+        </div>
+      `;
+    }
+
+    async function signOut() {
+      await sb.auth.signOut();
+      window.location.href = '../login.html';
+    }
+  </script>
+</body>
+
+</html>

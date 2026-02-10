@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stockd — Inventory & AI Forecasting for Modern Restaurants</title>
+    <meta name="description"
+        content="Effortless inventory management and AI-powered forecasting for modern restaurants. Master your kitchen's potential with Stockd.">
+    <link rel="stylesheet" href="css/landing.css">
+</head>
+
+<body>
+
+    <!-- Navigation -->
+    <nav class="nav">
+        <div class="nav-container">
+            <a href="landing.html" class="nav-logo">Stockd</a>
+            <div class="nav-links">
+                <a href="#features" class="nav-link">Features</a>
+                <a href="#pricing" class="nav-link">Pricing</a>
+                <a href="#contact" class="nav-link">Contact</a>
+                <a href="login.html" class="btn btn-primary btn-nav">Get Started</a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="hero-container">
+            <h1 class="hero-headline animate-fade-in">Master your kitchen's potential.</h1>
+            <p class="hero-subheadline animate-fade-in animate-delay-1">
+                Effortless inventory management and AI-powered forecasting for modern restaurants.
+            </p>
+            <div class="hero-ctas animate-fade-in animate-delay-2">
+                <a href="login.html" class="btn btn-primary btn-hero">Request Demo</a>
+                <a href="#features" class="btn btn-secondary btn-hero">Watch Video</a>
+            </div>
+
+            <!-- Dashboard Mockup -->
+            <div class="hero-mockup animate-fade-in animate-delay-3">
+                <div class="hero-mockup-wrapper">
+                    <div class="hero-mockup-frame">
+                        <div class="hero-mockup-screen">
+                            <!-- Dashboard Preview - Apple Style -->
+                            <div class="dashboard-preview">
+                                <!-- Alert Banner -->
+                                <div class="dash-alert">
+                                    <div class="dash-alert-icon">
+                                        <svg viewBox="0 0 24 24">
+                                            <path
+                                                d="M12 2L1 21h22L12 2zm0 3.83L19.53 19H4.47L12 5.83zM11 10v4h2v-4h-2zm0 6v2h2v-2h-2z" />
+                                        </svg>
+                                    </div>
+                                    <div class="dash-alert-content">
+                                        <div class="dash-alert-title">1 Critical · 2 Warning</div>
+                                        <div class="dash-alert-message">CRITICAL: Pepperoni will run out today! Order
+                                            29.5 kg immediately. (+2 more alerts)</div>
+                                    </div>
+                                    <button class="dash-alert-btn">View All</button>
+                                </div>
+
+                                <!-- Metric Cards Row -->
+                                <div class="dash-metrics">
+                                    <div class="dash-metric-card green">
+                                        <div class="dash-metric-icon">
+                                            <svg viewBox="0 0 24 24">
+                                                <path
+                                                    d="M11.8 10.9c-2.27-.59-3-1.2-3-2.15 0-1.09 1.01-1.85 2.7-1.85 1.78 0 2.44.85 2.5 2.1h2.21c-.07-1.72-1.12-3.3-3.21-3.81V3h-3v2.16c-1.94.42-3.5 1.68-3.5 3.61 0 2.31 1.91 3.46 4.7 4.13 2.5.6 3 1.48 3 2.41 0 .69-.49 1.79-2.7 1.79-2.06 0-2.87-.92-2.98-2.1h-2.2c.12 2.19 1.76 3.42 3.68 3.83V21h3v-2.15c1.95-.37 3.5-1.5 3.5-3.55 0-2.84-2.43-3.81-4.7-4.4z" />
+                                            </svg>
+                                        </div>
+                                        <div class="dash-metric-label">Weekly Revenue</div>
+                                        <div class="dash-metric-value">$26,241</div>
+                                        <div class="dash-metric-subtitle"><span class="up">↑ 8.2%</span> vs last week
+                                        </div>
+                                    </div>
+                                    <div class="dash-metric-card blue active">
+                                        <div class="dash-metric-icon">
+                                            <svg viewBox="0 0 24 24">
+                                                <path
+                                                    d="M7 18c-1.1 0-1.99.9-1.99 2S5.9 22 7 22s2-.9 2-2-.9-2-2-2zM1 2v2h2l3.6 7.59-1.35 2.45c-.16.28-.25.61-.25.96 0 1.1.9 2 2 2h12v-2H7.42c-.14 0-.25-.11-.25-.25l.03-.12.9-1.63h7.45c.75 0 1.41-.41 1.75-1.03l3.58-6.49c.08-.14.12-.31.12-.48 0-.55-.45-1-1-1H5.21l-.94-2H1zm16 16c-1.1 0-1.99.9-1.99 2s.89 2 1.99 2 2-.9 2-2-.9-2-2-2z" />
+                                            </svg>
+                                        </div>
+                                        <div class="dash-metric-label">Avg Order Value</div>
+                                        <div class="dash-metric-value">$18</div>
+                                        <div class="dash-metric-subtitle">158 orders/day avg</div>
+                                    </div>
+                                    <div class="dash-metric-card red">
+                                        <div class="dash-metric-icon">
+                                            <svg viewBox="0 0 24 24">
+                                                <path
+                                                    d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z" />
+                                            </svg>
+                                        </div>
+                                        <div class="dash-metric-label">Inventory Alerts</div>
+                                        <div class="dash-metric-value">3</div>
+                                        <div class="dash-metric-subtitle">1 critical, 2 low</div>
+                                    </div>
+                                    <div class="dash-metric-card purple">
+                                        <div class="dash-metric-icon">
+                                            <svg viewBox="0 0 24 24">
+                                                <path
+                                                    d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z" />
+                                            </svg>
+                                        </div>
+                                        <div class="dash-metric-label">Forecast Accuracy</div>
+                                        <div class="dash-metric-value">87%</div>
+                                        <div class="dash-metric-subtitle">Last 30 days MAPE: 13%</div>
+                                    </div>
+                                </div>
+
+                                <!-- Charts Row -->
+                                <div class="dash-charts-row">
+                                    <!-- Revenue Trend Area Chart -->
+                                    <div class="dash-chart-card">
+                                        <div class="dash-chart-header">
+                                            <div class="dash-chart-accent teal"></div>
+                                            <div class="dash-chart-title">Revenue Trend (4 Weeks)</div>
+                                        </div>
+                                        <div class="dash-area-chart">
+                                            <div class="dash-y-axis">
+                                                <span>$6000</span>
+                                                <span>$4500</span>
+                                                <span>$3000</span>
+                                                <span>$1500</span>
+                                                <span>$0</span>
+                                            </div>
+                                            <div class="dash-chart-area">
+                                                <svg viewBox="0 0 240 100" preserveAspectRatio="none">
+                                                    <defs>
+                                                        <linearGradient id="areaGradient" x1="0%" y1="0%" x2="0%"
+                                                            y2="100%">
+                                                            <stop offset="0%"
+                                                                style="stop-color:#30d158;stop-opacity:0.5" />
+                                                            <stop offset="100%"
+                                                                style="stop-color:#30d158;stop-opacity:0.05" />
+                                                        </linearGradient>
+                                                    </defs>
+                                                    <!-- Area fill -->
+                                                    <path
+                                                        d="M0,70 L15,68 L30,72 L45,65 L60,62 L75,58 L90,55 L105,52 L120,48 L135,52 L150,45 L165,50 L180,42 L195,38 L210,35 L225,32 L240,30 L240,100 L0,100 Z"
+                                                        fill="url(#areaGradient)" />
+                                                    <!-- Line -->
+                                                    <path
+                                                        d="M0,70 L15,68 L30,72 L45,65 L60,62 L75,58 L90,55 L105,52 L120,48 L135,52 L150,45 L165,50 L180,42 L195,38 L210,35 L225,32 L240,30"
+                                                        stroke="#30d158" stroke-width="2.5" fill="none"
+                                                        stroke-linecap="round" stroke-linejoin="round" />
+                                                </svg>
+                                            </div>
+                                        </div>
+                                        <div class="dash-x-axis">
+                                            <span>Tue (-1w)</span>
+                                            <span>Thu (-1w)</span>
+                                            <span>Sat (-1w)</span>
+                                            <span>Mon</span>
+                                            <span>Tue</span>
+                                            <span>Wed</span>
+                                            <span>Thu</span>
+                                            <span>Fri</span>
+                                            <span>Sat</span>
+                                            <span>Sun</span>
+                                        </div>
+                                    </div>
+
+                                    <!-- Donut Chart -->
+                                    <div class="dash-chart-card">
+                                        <div class="dash-chart-header">
+                                            <div class="dash-chart-accent blue"></div>
+                                            <div class="dash-chart-title">Sales by Category</div>
+                                        </div>
+                                        <div class="dash-donut-container">
+                                            <div class="dash-donut-ring">
+                                                <svg viewBox="0 0 100 100">
+                                                    <!-- Thick donut ring segments -->
+                                                    <circle cx="50" cy="50" r="38" fill="none" stroke="#30d158"
+                                                        stroke-width="14" stroke-dasharray="95 239" />
+                                                    <circle cx="50" cy="50" r="38" fill="none" stroke="#64d2ff"
+                                                        stroke-width="14" stroke-dasharray="55 239"
+                                                        stroke-dashoffset="-95" />
+                                                    <circle cx="50" cy="50" r="38" fill="none" stroke="#bf5af2"
+                                                        stroke-width="14" stroke-dasharray="40 239"
+                                                        stroke-dashoffset="-150" />
+                                                    <circle cx="50" cy="50" r="38" fill="none" stroke="#ff9f0a"
+                                                        stroke-width="14" stroke-dasharray="28 239"
+                                                        stroke-dashoffset="-190" />
+                                                    <circle cx="50" cy="50" r="38" fill="none" stroke="#ff375f"
+                                                        stroke-width="14" stroke-dasharray="21 239"
+                                                        stroke-dashoffset="-218" />
+                                                </svg>
+                                            </div>
+                                            <div class="dash-legend">
+                                                <div class="dash-legend-item">
+                                                    <div class="dash-legend-dot teal"></div>
+                                                    <span>Pizza (117)</span>
+                                                </div>
+                                                <div class="dash-legend-item">
+                                                    <div class="dash-legend-dot blue"></div>
+                                                    <span>Salad (28)</span>
+                                                </div>
+                                                <div class="dash-legend-item">
+                                                    <div class="dash-legend-dot purple"></div>
+                                                    <span>Appetizer (35)</span>
+                                                </div>
+                                                <div class="dash-legend-item">
+                                                    <div class="dash-legend-dot orange"></div>
+                                                    <span>Pasta (20)</span>
+                                                </div>
+                                                <div class="dash-legend-item">
+                                                    <div class="dash-legend-dot pink"></div>
+                                                    <span>Dessert (18)</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section class="features" id="features">
+        <div class="features-container">
+            <div class="features-header">
+                <h2 class="features-headline">Intelligence on the menu.</h2>
+            </div>
+            <div class="features-grid">
+                <!-- Feature 1: Inventory -->
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                            <path d="M2 17l10 5 10-5" />
+                            <path d="M2 12l10 5 10-5" />
+                        </svg>
+                    </div>
+                    <h3 class="feature-title">Smart Inventory</h3>
+                    <p class="feature-description">
+                        Real-time tracking of every ingredient with automatic reorder alerts before you run low.
+                    </p>
+                </div>
+
+                <!-- Feature 2: Forecasting -->
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M3 3v18h18" />
+                            <path d="M18 9l-5 5-4-4-3 3" />
+                            <circle cx="18" cy="9" r="2" />
+                        </svg>
+                    </div>
+                    <h3 class="feature-title">AI Forecasting</h3>
+                    <p class="feature-description">
+                        Predict demand with machine learning trained on your sales patterns and seasonal trends.
+                    </p>
+                </div>
+
+                <!-- Feature 3: Automation -->
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <circle cx="12" cy="12" r="3" />
+                            <path
+                                d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
+                        </svg>
+                    </div>
+                    <h3 class="feature-title">Effortless Automation</h3>
+                    <p class="feature-description">
+                        Automated purchase orders, waste tracking, and daily reports delivered to your inbox.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA Section -->
+    <section class="cta-section" id="pricing">
+        <div class="cta-container">
+            <h2 class="cta-headline">Ready to transform your kitchen?</h2>
+            <p class="cta-subtext">Join hundreds of restaurants already using Stockd to reduce waste and boost
+                profits.</p>
+            <a href="login.html" class="btn btn-primary btn-hero">Start Free Trial</a>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer" id="contact">
+        <div class="footer-container">
+            <div class="footer-copyright">
+                © 2026 Stockd. Built at UGAHacks 11.
+            </div>
+            <div class="footer-links">
+                <a href="#" class="footer-link">Privacy</a>
+                <a href="#" class="footer-link">Terms</a>
+                <a href="#" class="footer-link">Contact</a>
+            </div>
+        </div>
+    </footer>
+
+</body>
+
+</html>

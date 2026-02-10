@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Stockd — Login</title>
+  <link rel="icon" type="image/svg+xml" href="assets/logo-s.svg">
+  <link rel="stylesheet" href="css/app-light.css">
+  <style>
+    :root {
+      --system-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      --blue: #0071e3;
+      --blue-hover: #0077ed;
+      --bg-color: #f5f5f7;
+      --card-bg: #ffffff;
+      --text-main: #1d1d1f;
+      --text-sub: #86868b;
+      --border-color: #d2d2d7;
+      --input-bg: #ffffff;
+      --focus-ring: rgba(0, 113, 227, 0.25);
+    }
+
+    body {
+      margin: 0;
+      font-family: var(--system-font);
+      background-color: var(--bg-color);
+      color: var(--text-main);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .login-container {
+      width: 100%;
+      max-width: 440px;
+      padding: 20px;
+    }
+
+    .login-box {
+      background: var(--card-bg);
+      border-radius: 24px;
+      box-shadow: 0 4px 24px rgba(0, 0, 0, 0.04);
+      padding: 48px 40px;
+      text-align: center;
+      position: relative;
+    }
+
+    .app-logo {
+      width: 80px;
+      height: 80px;
+      margin: 0 auto 24px;
+      background-image: url('assets/logo-s.svg');
+      background-size: contain;
+      background-repeat: no-repeat;
+      background-position: center;
+    }
+
+    h1 {
+      font-size: 28px;
+      font-weight: 700;
+      margin: 0 0 8px;
+      color: var(--text-main);
+    }
+
+    .subtitle {
+      font-size: 15px;
+      color: var(--text-sub);
+      margin-bottom: 32px;
+      font-weight: 400;
+    }
+
+    .input-group {
+      text-align: left;
+      margin-bottom: 16px;
+    }
+
+    .input-field {
+      width: 100%;
+      box-sizing: border-box;
+      height: 50px;
+      padding: 0 16px;
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      font-size: 17px;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      background: var(--input-bg);
+      color: var(--text-main);
+    }
+
+    .input-field:focus {
+      border-color: var(--blue);
+      box-shadow: 0 0 0 4px var(--focus-ring);
+    }
+
+    .input-field::placeholder {
+      color: #86868b;
+    }
+
+    .btn-primary {
+      width: 100%;
+      height: 48px;
+      background-color: var(--blue);
+      color: white;
+      border: none;
+      border-radius: 12px;
+      font-size: 17px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 8px;
+      transition: background-color 0.2s, transform 0.1s;
+    }
+
+    .btn-primary:hover {
+      background-color: var(--blue-hover);
+    }
+
+    .btn-primary:active {
+      transform: scale(0.98);
+    }
+
+    .btn-primary:disabled {
+      background-color: #99c7ff;
+      cursor: not-allowed;
+    }
+
+    .divider {
+      margin: 24px 0;
+      display: flex;
+      align-items: center;
+      color: var(--text-sub);
+      font-size: 13px;
+    }
+
+    .divider::before,
+    .divider::after {
+      content: "";
+      flex: 1;
+      height: 1px;
+      background-color: #e5e5e5;
+    }
+
+    .divider::before {
+      margin-right: 12px;
+    }
+
+    .divider::after {
+      margin-left: 12px;
+    }
+
+    .create-account-link {
+      color: var(--blue);
+      font-size: 14px;
+      text-decoration: none;
+      font-weight: 500;
+      display: inline-block;
+      margin-top: 2px;
+    }
+
+    .create-account-link:hover {
+      text-decoration: underline;
+    }
+
+    .error-msg {
+      color: #ff3b30;
+      font-size: 13px;
+      margin-top: 12px;
+      display: none;
+      background: rgba(255, 59, 48, 0.1);
+      padding: 10px;
+      border-radius: 8px;
+    }
+
+    .footer-text {
+      margin-top: 24px;
+      color: #86868b;
+      font-size: 12px;
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="login-container">
+    <div class="login-box">
+      <div class="app-logo"></div>
+      <h1>Sign in with Stockd</h1>
+      <div class="subtitle">Manage your inventory intelligently</div>
+
+      <div class="input-group">
+        <input type="email" class="input-field" id="email" placeholder="Email" autofocus>
+      </div>
+      <div class="input-group">
+        <input type="password" class="input-field" id="password" placeholder="Password">
+      </div>
+
+      <div class="error-msg" id="error-msg"></div>
+
+      <button class="btn-primary" id="login-btn" onclick="doLogin()">
+        Continue
+      </button>
+
+      <div class="divider">or</div>
+
+      <a href="#" class="create-account-link" onclick="doSignUp(); return false;">Create your Stockd account</a>
+    </div>
+
+    <div class="footer-text">
+      Copyright © 2026 Stockd Inc. All rights reserved.
+      <br>
+      <a href="landing.html" style="color:#86868b;text-decoration:none;margin-top:8px;display:inline-block;">← Back to
+        Home</a>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/env.js"></script>
+  <script src="js/supabase-client.js"></script>
+  <script>
+    // If already logged in, go to app
+    (async () => {
+      const { data: { session } } = await sb.auth.getSession();
+      if (session) window.location.href = 'index.html';
+    })();
+
+    // Handle Enter key
+    document.getElementById('password').addEventListener('keydown', e => {
+      if (e.key === 'Enter') doLogin();
+    });
+
+    async function doLogin() {
+      const email = document.getElementById('email').value.trim();
+      const pass = document.getElementById('password').value;
+      if (!email || !pass) { showError('Enter email and password'); return; }
+
+      setLoading(true);
+      const { error } = await sb.auth.signInWithPassword({ email, password: pass });
+
+      if (error) {
+        showError(error.message);
+        setLoading(false);
+      } else {
+        window.location.href = 'index.html';
+      }
+    }
+
+    async function doSignUp() {
+      const email = document.getElementById('email').value.trim();
+      const pass = document.getElementById('password').value;
+      if (!email || !pass) { showError('Enter email and password'); return; }
+      if (pass.length < 6) { showError('Password must be at least 6 characters'); return; }
+
+      setLoading(true);
+      const { error } = await sb.auth.signUp({ email, password: pass });
+
+      if (error) {
+        showError(error.message);
+        setLoading(false);
+      } else {
+        showError('');
+        document.querySelector('.login-box').innerHTML = `
+          <div style="text-align:center;padding:32px 16px;">
+            <div style="font-size:48px;margin-bottom:16px;">✉️</div>
+            <h3 style="color:var(--text-main);font-size:20px;font-weight:600;margin-bottom:8px;">Check your email</h3>
+            <p style="color:var(--text-sub);font-size:14px;line-height:1.6;">
+              We sent a confirmation link to <strong style="color:var(--text-main)">${email}</strong>.<br>
+              Click it to activate your account, then sign in.
+            </p>
+          </div>
+        `;
+      }
+    }
+
+    function showError(msg) {
+      const el = document.getElementById('error-msg');
+      el.textContent = msg;
+      el.style.display = msg ? 'block' : 'none';
+    }
+
+    function setLoading(loading) {
+      const btn = document.getElementById('login-btn');
+      if (btn) {
+        btn.disabled = loading;
+        btn.textContent = loading ? 'Signing in...' : 'Continue';
+      }
+    }
+  </script>
+</body>
+
+</html>

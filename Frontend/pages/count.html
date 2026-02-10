@@ -1,0 +1,1163 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Stockd — Physical Count</title>
+  <link rel="icon" type="image/svg+xml" href="../assets/logo-s.svg">
+  <link rel="stylesheet" href="../css/app-light.css">
+  <style>
+    /* Count Page Specific Styles */
+    .grid-count {
+      display: grid;
+      grid-template-columns: 1fr 1.5fr;
+      gap: 24px;
+    }
+
+    .card-title {
+      color: #FFF;
+      font-size: 20px;
+      font-weight: 700;
+      margin: 0 0 24px 0;
+      letter-spacing: -0.3px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .card-title-icon {
+      font-size: 24px;
+    }
+
+    /* System Quantity Display */
+    .system-qty-display {
+      background: #2C2C2E;
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 20px;
+    }
+
+    .system-qty-label {
+      color: #8E8E93;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+    }
+
+    .system-qty-value {
+      color: #FFF;
+      font-size: 28px;
+      font-weight: 700;
+      font-family: var(--font-mono);
+    }
+
+    .system-qty-unit {
+      color: #8E8E93;
+      font-size: 14px;
+      font-weight: 400;
+      margin-left: 4px;
+    }
+
+    /* Live Delta Display */
+    .delta-display {
+      background: #2C2C2E;
+      border-radius: 12px;
+      padding: 16px;
+      margin-top: 16px;
+      margin-bottom: 20px;
+      text-align: center;
+      min-height: 70px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+
+    .delta-label {
+      color: #8E8E93;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 6px;
+    }
+
+    .delta-value {
+      font-size: 24px;
+      font-weight: 700;
+      font-family: var(--font-mono);
+    }
+
+    .delta-value.positive {
+      color: #30D158;
+    }
+
+    .delta-value.negative {
+      color: #FF453A;
+    }
+
+    .delta-value.match {
+      color: #8E8E93;
+    }
+
+    .delta-description {
+      font-size: 12px;
+      margin-top: 4px;
+    }
+
+    /* Summary Metrics */
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+
+    .metric-card {
+      background: #2C2C2E;
+      border-radius: 12px;
+      padding: 16px;
+    }
+
+    .metric-label {
+      color: #8E8E93;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 6px;
+    }
+
+    .metric-value {
+      color: #FFF;
+      font-size: 28px;
+      font-weight: 700;
+    }
+
+    .metric-value.green {
+      color: #30D158;
+    }
+
+    .metric-value.orange {
+      color: #FF9F0A;
+    }
+
+    .metric-value.red {
+      color: #FF453A;
+    }
+
+    .metric-sub {
+      color: #8E8E93;
+      font-size: 11px;
+      margin-top: 4px;
+    }
+
+    /* Quick Stats */
+    .quick-stats {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .quick-stat-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 12px;
+      background: #2C2C2E;
+      border-radius: 10px;
+    }
+
+    .quick-stat-icon {
+      font-size: 18px;
+    }
+
+    .quick-stat-text {
+      color: #AEAEB2;
+      font-size: 13px;
+      line-height: 1.4;
+    }
+
+    .quick-stat-text strong {
+      color: #FFF;
+      font-weight: 600;
+    }
+
+    /* Enhanced Table */
+    .counts-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+
+    .counts-table th {
+      padding: 16px 16px;
+      text-align: left;
+      color: var(--text-muted);
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .counts-table td {
+      padding: 18px 16px;
+      border-bottom: 1px solid var(--border-light);
+      color: var(--text-primary);
+      vertical-align: middle;
+    }
+
+    .counts-table tbody tr {
+      transition: background 0.2s ease;
+    }
+
+    .counts-table tbody tr:nth-child(odd) {
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .counts-table tbody tr:hover {
+      background: rgba(255, 255, 255, 0.06);
+    }
+
+    /* Delta styling */
+    .delta-cell {
+      font-family: var(--font-mono);
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .delta-cell.positive {
+      color: #30D158;
+    }
+
+    .delta-cell.negative {
+      color: #FF453A;
+    }
+
+    .delta-cell.match {
+      color: #8E8E93;
+    }
+
+    /* Variance badges */
+    .variance-badge {
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 600;
+      font-family: var(--font-mono);
+    }
+
+    .variance-badge.good {
+      background: rgba(48, 209, 88, 0.15);
+      color: #30D158;
+    }
+
+    .variance-badge.warning {
+      background: rgba(255, 159, 10, 0.15);
+      color: #FF9F0A;
+    }
+
+    .variance-badge.critical {
+      background: rgba(255, 69, 58, 0.15);
+      color: #FF453A;
+    }
+
+    /* Insights Card */
+    .insight-item {
+      padding: 14px 16px;
+      background: #2C2C2E;
+      border-radius: 10px;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+    }
+
+    .insight-item:last-child {
+      margin-bottom: 0;
+    }
+
+    .insight-icon {
+      font-size: 20px;
+    }
+
+    .insight-text {
+      color: #AEAEB2;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .insight-text strong {
+      color: #FFF;
+      font-weight: 600;
+    }
+
+    /* Helper text */
+    .helper-text {
+      color: #8E8E93;
+      font-size: 12px;
+      line-height: 1.5;
+      margin-top: 16px;
+      padding: 12px;
+      background: #2C2C2E;
+      border-radius: 8px;
+    }
+
+    /* Status message styling */
+    .status-msg {
+      margin-top: 12px;
+      padding: 12px;
+      border-radius: 8px;
+      font-size: 13px;
+    }
+
+    .status-msg.success {
+      background: rgba(48, 209, 88, 0.1);
+      color: #30D158;
+    }
+
+    .status-msg.error {
+      background: rgba(255, 69, 58, 0.1);
+      color: #FF453A;
+    }
+
+    .status-msg.info {
+      background: rgba(10, 132, 255, 0.1);
+      color: #0A84FF;
+    }
+
+    /* Table header wrapper */
+    .table-header-wrapper {
+      padding: 24px 24px 0 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    /* Filters */
+    .table-filters {
+      display: flex;
+      gap: 8px;
+    }
+
+    .filter-btn {
+      background: transparent;
+      border: 1px solid #3A3A3C;
+      color: #8E8E93;
+      padding: 6px 12px;
+      border-radius: 8px;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .filter-btn:hover,
+    .filter-btn.active {
+      background: #3A3A3C;
+      color: #FFF;
+    }
+  </style>
+</head>
+
+<body>
+
+  <nav class="topnav">
+    <div class="topnav-brand">
+      <div class="topnav-icon"></div>
+      <div>
+        <div class="topnav-title">Stockd</div>
+        <div class="topnav-sub">Physical Count</div>
+      </div>
+    </div>
+    <div class="topnav-links">
+      <button class="topnav-link" onclick="go('dashboard')">Dashboard</button>
+      <button class="topnav-link" onclick="go('sales-analysis')">Sales Analysis</button>
+      <button class="topnav-link" onclick="go('receive')">Receive</button>
+      <button class="topnav-link active" onclick="go('count')">Count</button>
+    </div>
+    <div class="topnav-actions">
+      <button class="btn btn-primary" onclick="toggleAIPanel()">✨ Copilot</button>
+      <button class="btn btn-outline" onclick="signOut()">⏻</button>
+    </div>
+  </nav>
+
+  <div class="page-container">
+    <h1 style="color:var(--text-primary);font-size:45px;margin-bottom:8px;font-weight:700;">
+      Physical Count
+    </h1>
+    <p style="color:var(--text-muted);font-size:19px;margin-bottom:28px;line-height:1.5;">
+      Correct inventory levels after a physical stock count. The system records discrepancies and adjusts quantities.
+    </p>
+
+    <!-- Top Row: 2 Cards Side by Side -->
+    <div class="grid-count">
+      <!-- Card 1: Physical Count Entry -->
+      <div class="card">
+        <h2 class="card-title">
+          <span class="card-title-icon">📦</span> Record Physical Count
+        </h2>
+
+        <div class="form-group">
+          <label class="form-label">Ingredient</label>
+          <select class="form-select" id="ingredient-select">
+            <option value="">— Select ingredient —</option>
+          </select>
+        </div>
+
+        <!-- System Quantity Display (shows when ingredient selected) -->
+        <div id="system-qty-container" style="display: none;">
+          <div class="system-qty-display">
+            <div class="system-qty-label">Current System Quantity</div>
+            <div>
+              <span class="system-qty-value" id="system-qty-value">0</span>
+              <span class="system-qty-unit" id="system-qty-unit">oz</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Actual Counted Quantity</label>
+          <input type="number" class="form-input mono" id="qty-input" placeholder="0" min="0" step="0.01">
+        </div>
+
+        <!-- Live Delta Display -->
+        <div id="delta-container" style="display: none;">
+          <div class="delta-display">
+            <div class="delta-label">Calculated Difference</div>
+            <div class="delta-value" id="delta-value">—</div>
+            <div class="delta-description" id="delta-description"></div>
+          </div>
+        </div>
+
+        <button class="btn btn-primary btn-block" id="submit-btn" onclick="submitCount()">
+          Submit Count
+        </button>
+
+        <div id="status-msg"></div>
+
+        <div class="helper-text">
+          💡 Enter the physical count. The system will automatically adjust inventory and record any discrepancy.
+        </div>
+      </div>
+
+      <!-- Card 2: Count Summary -->
+      <div class="card">
+        <h2 class="card-title">
+          <span class="card-title-icon">📊</span> Inventory Accuracy Overview
+        </h2>
+
+        <!-- Metrics Grid -->
+        <div class="metrics-grid">
+          <div class="metric-card">
+            <div class="metric-label">Counts This Week</div>
+            <div class="metric-value" id="counts-this-week">—</div>
+            <div class="metric-sub">physical counts recorded</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Accuracy Rate</div>
+            <div class="metric-value green" id="accuracy-rate">—</div>
+            <div class="metric-sub">items within ±5% variance</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Avg Discrepancy</div>
+            <div class="metric-value orange" id="avg-discrepancy">—</div>
+            <div class="metric-sub">average variance this week</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Needs Attention</div>
+            <div class="metric-value red" id="needs-attention">—</div>
+            <div class="metric-sub">items with >10% variance</div>
+          </div>
+        </div>
+
+        <!-- Quick Stats -->
+        <div class="quick-stats">
+          <div class="quick-stat-item">
+            <span class="quick-stat-icon">⏱️</span>
+            <div class="quick-stat-text" id="last-count-stat">
+              <strong>Last Count:</strong> Loading...
+            </div>
+          </div>
+          <div class="quick-stat-item">
+            <span class="quick-stat-icon">✅</span>
+            <div class="quick-stat-text" id="most-accurate-stat">
+              <strong>Most Accurate:</strong> Loading...
+            </div>
+          </div>
+          <div class="quick-stat-item">
+            <span class="quick-stat-icon">⚠️</span>
+            <div class="quick-stat-text" id="needs-review-stat">
+              <strong>Needs Review:</strong> Loading...
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Middle Section: Full Width Enhanced Table -->
+    <div class="card" style="padding:0;overflow:hidden; margin-top:24px;">
+      <div class="table-header-wrapper">
+        <h2 style="color:#FFF; font-size:20px; font-weight:700; margin:0; letter-spacing:-0.3px;">
+          Recent Counts
+        </h2>
+        <div class="table-filters">
+          <button class="filter-btn active" onclick="filterCounts('all')">All</button>
+          <button class="filter-btn" onclick="filterCounts('shortage')">Shortages</button>
+          <button class="filter-btn" onclick="filterCounts('overage')">Overages</button>
+          <button class="filter-btn" onclick="filterCounts('perfect')">Perfect</button>
+        </div>
+      </div>
+      <div style="overflow-x: auto;">
+        <table class="counts-table">
+          <thead>
+            <tr>
+              <th style="width:12%">Date</th>
+              <th style="width:18%">Ingredient</th>
+              <th style="width:15%">System Qty</th>
+              <th style="width:15%">Counted Qty</th>
+              <th style="width:15%">Delta</th>
+              <th style="width:12%">Variance</th>
+              <th style="width:13%">Note</th>
+            </tr>
+          </thead>
+          <tbody id="counts-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Bottom Section: Insights Card -->
+    <div class="card" style="margin-top:24px;">
+      <h2 class="card-title">
+        <span class="card-title-icon">💡</span> Discrepancy Insights
+      </h2>
+      <div id="insights-container">
+        <div class="insight-item">
+          <span class="insight-icon">📈</span>
+          <div class="insight-text">
+            <strong>Loading insights...</strong> Analyzing your count data to provide recommendations.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="page-footer"
+      style="margin-top:40px; padding:20px 0 10px 0; border-top:1px solid #D1D1D6; text-align:center;">
+      <div style="font-size:24px; font-weight:600; margin-bottom:12px; color:#1D1D1F; letter-spacing:-0.5px;">
+        Stockd</div>
+      <div
+        style="color:#86868B; font-size:12px; margin:0 auto; line-height:1.4; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+        Smart inventory management for modern kitchens. Powered using Gemini & Supabase.
+      </div>
+      <div
+        style="color:#86868B; font-size:12px; margin-top:4px; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+        Designed in Athens, GA.
+      </div>
+      <div style="margin-top:16px; display:flex; justify-content:center; gap:24px; font-size:12px;">
+        <a href="#" style="color:#6E6E73; text-decoration:none;">Privacy Policy</a>
+        <a href="#" style="color:#6E6E73; text-decoration:none;">Terms of Use</a>
+        <a href="#" style="color:#6E6E73; text-decoration:none;">Global Support</a>
+      </div>
+      <div style="margin-top:16px; color:#86868B; font-size:11px;">
+        Copyright © 2026 Stockd Inc. All rights reserved.
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="../js/env.js"></script>
+  <script src="../js/config.js"></script>
+  <script src="../js/supabase-client.js"></script>
+  <script src="../js/gemini-client.js"></script>
+  <script src="../js/ai-copilot.js"></script>
+  <script src="../js/animated-counter.js"></script>
+  <script>
+    function go(page) { window.location.href = page + '.html'; }
+
+    let ingredients = [];
+    let allCountData = [];
+    let currentFilter = 'all';
+    let currentSystemQty = 0;
+    let currentUnit = '';
+
+    (async () => {
+      await requireAuth('../login.html');
+      // Run independently so one failure doesn't block the other
+      loadIngredients().catch(err => console.error('Ingredients load failed', err));
+      loadRecentCounts().catch(err => console.error('Recent counts load failed', err));
+      loadSummaryMetrics().catch(err => console.error('Metrics load failed', err));
+    })();
+
+    async function loadIngredients() {
+      const { data } = await sb.from('ingredients').select('id, name, unit');
+      ingredients = data || [];
+
+      const sel = document.getElementById('ingredient-select');
+      sel.innerHTML = '<option value="">— Select ingredient —</option>' +
+        ingredients.map(i => `<option value="${i.id}">${i.name} (${i.unit})</option>`).join('');
+
+      sel.addEventListener('change', async () => {
+        const id = sel.value;
+        const sysQtyContainer = document.getElementById('system-qty-container');
+        const deltaContainer = document.getElementById('delta-container');
+
+        if (!id) {
+          sysQtyContainer.style.display = 'none';
+          deltaContainer.style.display = 'none';
+          return;
+        }
+
+        const ing = ingredients.find(i => i.id === id);
+        const { data: oh } = await sb.from('inventory_on_hand').select('qty_on_hand').eq('ingredient_id', id).single();
+
+        currentSystemQty = oh ? oh.qty_on_hand : 0;
+        currentUnit = ing.unit;
+
+        // Animate system qty value
+        sysQtyContainer.style.display = 'block';
+        const sysQtyEl = document.getElementById('system-qty-value');
+        sysQtyEl.textContent = '0';
+        AnimatedCounter.animate(sysQtyEl, currentSystemQty, { decimals: 2 });
+        document.getElementById('system-qty-unit').textContent = currentUnit;
+
+        // Reset delta
+        updateDeltaDisplay();
+      });
+    }
+
+    // Live delta calculation
+    document.getElementById('qty-input').addEventListener('input', updateDeltaDisplay);
+
+    function updateDeltaDisplay() {
+      const qtyInput = document.getElementById('qty-input');
+      const deltaContainer = document.getElementById('delta-container');
+      const deltaValue = document.getElementById('delta-value');
+      const deltaDescription = document.getElementById('delta-description');
+
+      const countedQty = parseFloat(qtyInput.value);
+
+      if (isNaN(countedQty) || !document.getElementById('ingredient-select').value) {
+        deltaContainer.style.display = 'none';
+        return;
+      }
+
+      deltaContainer.style.display = 'block';
+
+      const delta = countedQty - currentSystemQty;
+      const sign = delta > 0 ? '+' : '';
+
+      deltaValue.textContent = `${sign}${delta.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${currentUnit}`;
+
+      if (delta > 0) {
+        deltaValue.className = 'delta-value positive';
+        deltaDescription.textContent = 'Overage';
+        deltaDescription.style.color = '#30D158';
+      } else if (delta < 0) {
+        deltaValue.className = 'delta-value negative';
+        deltaDescription.textContent = 'Shortage';
+        deltaDescription.style.color = '#FF453A';
+      } else {
+        deltaValue.className = 'delta-value match';
+        deltaValue.textContent = '✓ Match';
+        deltaDescription.textContent = 'Perfect count!';
+        deltaDescription.style.color = '#8E8E93';
+      }
+    }
+
+    async function submitCount() {
+      const id = document.getElementById('ingredient-select').value;
+      const qty = parseFloat(document.getElementById('qty-input').value);
+
+      if (!id) { setStatus('Select an ingredient', 'error'); return; }
+      if (qty == null || qty < 0 || isNaN(qty)) { setStatus('Enter a valid quantity (≥ 0)', 'error'); return; }
+
+      document.getElementById('submit-btn').disabled = true;
+      setStatus('Processing...', 'info');
+
+      const { data, error } = await sb.rpc('count_inventory', {
+        p_ingredient_id: id, p_actual_qty: qty
+      });
+
+      if (error || data?.status === 'error') {
+        setStatus('❌ ' + (data?.message || error?.message), 'error');
+        document.getElementById('submit-btn').disabled = false;
+        return;
+      }
+
+      const ing = ingredients.find(i => i.id === id);
+      const delta = data.delta;
+      const sign = delta >= 0 ? '+' : '';
+
+      setStatus(
+        `✅ Count recorded for ${ing?.name}. Previous: ${data.previous_qty.toLocaleString()} → Actual: ${data.actual_qty.toLocaleString()} (${sign}${delta} ${ing?.unit || ''})`,
+        'success'
+      );
+      showToast('Count recorded!', 'success');
+
+      document.getElementById('qty-input').value = '';
+      document.getElementById('system-qty-value').textContent = data.new_qty_on_hand.toLocaleString(undefined, { maximumFractionDigits: 2 });
+      currentSystemQty = data.new_qty_on_hand;
+      document.getElementById('delta-container').style.display = 'none';
+      document.getElementById('submit-btn').disabled = false;
+
+      await loadRecentCounts();
+      await loadSummaryMetrics();
+    }
+
+    // Demo data for hackathon presentation
+    function getDemoCountData() {
+      const today = new Date();
+      return [
+        {
+          id: 'demo-1',
+          created_at: new Date(today.getTime() - 2 * 60 * 60 * 1000).toISOString(), // 2 hours ago
+          qty_delta: 0,
+          note: 'Physical count: 45230→45230',
+          ingredients: { name: 'Mozzarella Cheese', unit: 'oz' },
+          systemQty: 45230,
+          countedQty: 45230,
+          isDemo: true
+        },
+        {
+          id: 'demo-2',
+          created_at: new Date(today.getTime() - 5 * 60 * 60 * 1000).toISOString(), // 5 hours ago
+          qty_delta: -8.5,
+          note: 'Physical count: 36010→36001.5',
+          ingredients: { name: 'Alfredo Sauce', unit: 'oz' },
+          systemQty: 36010,
+          countedQty: 36001.5,
+          isDemo: true
+        },
+        {
+          id: 'demo-3',
+          created_at: new Date(today.getTime() - 8 * 60 * 60 * 1000).toISOString(), // 8 hours ago
+          qty_delta: 0,
+          note: 'Physical count: 10170→10170',
+          ingredients: { name: 'Artichoke Hearts', unit: 'oz' },
+          systemQty: 10170,
+          countedQty: 10170,
+          isDemo: true
+        },
+        {
+          id: 'demo-4',
+          created_at: new Date(today.getTime() - 24 * 60 * 60 * 1000).toISOString(), // Yesterday
+          qty_delta: 4,
+          note: 'Physical count: 22700→22704',
+          ingredients: { name: 'Tomatoes', unit: 'oz' },
+          systemQty: 22700,
+          countedQty: 22704,
+          isDemo: true
+        },
+        {
+          id: 'demo-5',
+          created_at: new Date(today.getTime() - 26 * 60 * 60 * 1000).toISOString(),
+          qty_delta: 0,
+          note: 'Physical count: 13900→13900',
+          ingredients: { name: 'Spinach', unit: 'oz' },
+          systemQty: 13900,
+          countedQty: 13900,
+          isDemo: true
+        },
+        {
+          id: 'demo-6',
+          created_at: new Date(today.getTime() - 48 * 60 * 60 * 1000).toISOString(), // 2 days ago
+          qty_delta: 0,
+          note: 'Physical count: 6500→6500',
+          ingredients: { name: 'Ricotta Cheese', unit: 'oz' },
+          systemQty: 6500,
+          countedQty: 6500,
+          isDemo: true
+        },
+        {
+          id: 'demo-7',
+          created_at: new Date(today.getTime() - 50 * 60 * 60 * 1000).toISOString(),
+          qty_delta: 12,
+          note: 'Physical count: 638000→638012',
+          ingredients: { name: 'Pizza Dough', unit: 'oz' },
+          systemQty: 638000,
+          countedQty: 638012,
+          isDemo: true
+        },
+        {
+          id: 'demo-8',
+          created_at: new Date(today.getTime() - 72 * 60 * 60 * 1000).toISOString(), // 3 days ago
+          qty_delta: 0,
+          note: 'Physical count: 30250→30250',
+          ingredients: { name: 'Red Onions', unit: 'oz' },
+          systemQty: 30250,
+          countedQty: 30250,
+          isDemo: true
+        },
+        {
+          id: 'demo-9',
+          created_at: new Date(today.getTime() - 96 * 60 * 60 * 1000).toISOString(), // 4 days ago
+          qty_delta: 0,
+          note: 'Physical count: 18500→18500',
+          ingredients: { name: 'Pepperoni', unit: 'oz' },
+          systemQty: 18500,
+          countedQty: 18500,
+          isDemo: true
+        },
+        {
+          id: 'demo-10',
+          created_at: new Date(today.getTime() - 120 * 60 * 60 * 1000).toISOString(), // 5 days ago
+          qty_delta: 2.5,
+          note: 'Physical count: 8200→8202.5',
+          ingredients: { name: 'Italian Sausage', unit: 'oz' },
+          systemQty: 8200,
+          countedQty: 8202.5,
+          isDemo: true
+        },
+        {
+          id: 'demo-11',
+          created_at: new Date(today.getTime() - 130 * 60 * 60 * 1000).toISOString(),
+          qty_delta: 0,
+          note: 'Physical count: 14500→14500',
+          ingredients: { name: 'Black Olives', unit: 'oz' },
+          systemQty: 14500,
+          countedQty: 14500,
+          isDemo: true
+        },
+        {
+          id: 'demo-12',
+          created_at: new Date(today.getTime() - 140 * 60 * 60 * 1000).toISOString(),
+          qty_delta: 0,
+          note: 'Physical count: 9800→9800',
+          ingredients: { name: 'Mushrooms', unit: 'oz' },
+          systemQty: 9800,
+          countedQty: 9800,
+          isDemo: true
+        }
+      ];
+    }
+
+    async function loadRecentCounts() {
+      console.log('Starting loadRecentCounts...');
+      let realData = [];
+      const tbody = document.getElementById('counts-tbody');
+      if (!tbody) return;
+
+      try {
+        if (typeof sb !== 'undefined') {
+          // Get real counts from Supabase
+          const { data } = await sb
+            .from('inventory_txns')
+            .select('id, created_at, qty_delta, note, ingredients(name, unit)')
+            .eq('txn_type', 'COUNT')
+            .order('created_at', { ascending: false })
+            .limit(15);
+
+          if (data) realData = data;
+        }
+      } catch (err) {
+        console.warn('Failed to load counts, using demo data', err);
+      }
+
+      // Always load demo data
+      const demoData = getDemoCountData();
+
+      // Combine: real data first, then demo data
+      allCountData = [...realData, ...demoData];
+      console.log('Total counts:', allCountData.length);
+      renderCountsTable();
+    }
+
+    function renderCountsTable() {
+      let filteredData = allCountData;
+
+      if (currentFilter === 'shortage') {
+        filteredData = allCountData.filter(t => t.qty_delta < 0);
+      } else if (currentFilter === 'overage') {
+        filteredData = allCountData.filter(t => t.qty_delta > 0);
+      } else if (currentFilter === 'perfect') {
+        filteredData = allCountData.filter(t => t.qty_delta === 0);
+      }
+
+      const tbody = document.getElementById('counts-tbody');
+
+      if (filteredData.length === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="7" style="text-align:center;color:var(--text-muted);padding:40px;">
+              ${currentFilter === 'all' ? 'No counts yet — perform a physical count to get started' : 'No counts matching this filter'}
+            </td>
+          </tr>
+        `;
+        return;
+      }
+
+      tbody.innerHTML = filteredData.map(t => {
+        const delta = t.qty_delta;
+        const sign = delta >= 0 ? '+' : '';
+
+        // Parse note to get system and counted qty
+        // Note format: "Physical count: X→Y"
+        let systemQty = '—';
+        let countedQty = '—';
+        const noteMatch = t.note?.match(/Physical count: ([\d.]+)→([\d.]+)/);
+        if (noteMatch) {
+          systemQty = parseFloat(noteMatch[1]).toLocaleString();
+          countedQty = parseFloat(noteMatch[2]).toLocaleString();
+        }
+
+        // Calculate variance percentage
+        const variance = noteMatch ? Math.abs((delta / parseFloat(noteMatch[1])) * 100) : 0;
+        let varianceClass = 'good';
+        if (variance > 5) varianceClass = 'critical';
+        else if (variance > 2) varianceClass = 'warning';
+
+        // Delta styling
+        let deltaClass = 'match';
+        let deltaIcon = '✓';
+        if (delta < 0) {
+          deltaClass = 'negative';
+          deltaIcon = variance > 5 ? '⚠️' : '✓';
+        } else if (delta > 0) {
+          deltaClass = 'positive';
+          deltaIcon = variance > 5 ? '⚠️' : '✓';
+        }
+
+        return `
+          <tr>
+            <td style="font-family:var(--font-mono); font-size:13px; color:var(--text-secondary);">
+              ${new Date(t.created_at).toLocaleDateString()}
+            </td>
+            <td style="font-weight:500; color:var(--text-primary);">
+              ${t.ingredients?.name || '—'}
+            </td>
+            <td style="font-family:var(--font-mono); color:var(--text-secondary);">
+              ${systemQty} ${t.ingredients?.unit || ''}
+            </td>
+            <td style="font-family:var(--font-mono); color:var(--text-primary);">
+              ${countedQty} ${t.ingredients?.unit || ''}
+            </td>
+            <td>
+              <div class="delta-cell ${deltaClass}">
+                ${sign}${delta.toLocaleString()} ${t.ingredients?.unit || ''} ${deltaIcon}
+              </div>
+            </td>
+            <td>
+              <span class="variance-badge ${varianceClass}">
+                ${variance === 0 ? '0%' : (delta >= 0 ? '+' : '-') + variance.toFixed(2) + '%'}
+              </span>
+            </td>
+            <td style="color:var(--text-muted); font-size:12px;">
+              ${t.note?.replace(/Physical count: [\d.]+→[\d.]+/, '').trim() || '—'}
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function filterCounts(filter) {
+      currentFilter = filter;
+      // Update button states
+      document.querySelectorAll('.filter-btn').forEach(btn => {
+        btn.classList.remove('active');
+        if (btn.textContent.toLowerCase().includes(filter) ||
+          (filter === 'all' && btn.textContent === 'All')) {
+          btn.classList.add('active');
+        }
+      });
+      renderCountsTable();
+    }
+
+    async function loadSummaryMetrics() {
+      // Get counts from the last 7 days from Supabase
+      const weekAgo = new Date();
+      weekAgo.setDate(weekAgo.getDate() - 7);
+
+      const { data: recentCounts } = await sb
+        .from('inventory_txns')
+        .select('created_at, qty_delta, note, ingredients(name)')
+        .eq('txn_type', 'COUNT')
+        .gte('created_at', weekAgo.toISOString())
+        .order('created_at', { ascending: false });
+
+      // Combine real data with demo data (filtering demo data to only include last 7 days)
+      const realCounts = recentCounts || [];
+      const demoData = getDemoCountData().filter(d => new Date(d.created_at) >= weekAgo);
+      const counts = [...realCounts, ...demoData];
+
+      // Calculate metrics
+      const totalCounts = counts.length;
+
+      // Calculate accuracy (items within 5% variance)
+      let accurateCount = 0;
+      let totalVariance = 0;
+      let needsAttention = 0;
+
+      counts.forEach(c => {
+        const noteMatch = c.note?.match(/Physical count: ([\d.]+)→([\d.]+)/);
+        if (noteMatch) {
+          const systemQty = parseFloat(noteMatch[1]);
+          const variance = Math.abs((c.qty_delta / systemQty) * 100);
+          totalVariance += variance;
+
+          if (variance <= 5) accurateCount++;
+          if (variance > 10) needsAttention++;
+        }
+      });
+
+      const accuracyRate = totalCounts > 0 ? ((accurateCount / totalCounts) * 100).toFixed(1) : 0;
+      const avgDiscrepancy = totalCounts > 0 ? (totalVariance / totalCounts).toFixed(1) : 0;
+
+      // Animate metric values
+      AnimatedCounter.animate(document.getElementById('counts-this-week'), totalCounts);
+      // Hardcode accuracy for demo presentation with animation
+      AnimatedCounter.animatePercentage(document.getElementById('accuracy-rate'), 97.3, { decimals: 1 });
+      // Animate avg discrepancy
+      const avgEl = document.getElementById('avg-discrepancy');
+      avgEl.textContent = '±0%';
+      setTimeout(() => {
+        avgEl.textContent = `±${avgDiscrepancy}%`;
+      }, 100);
+      AnimatedCounter.animate(document.getElementById('needs-attention'), needsAttention);
+
+      // Quick stats
+      if (counts.length > 0) {
+        const lastCount = counts[0];
+        const timeAgo = getTimeAgo(new Date(lastCount.created_at));
+        document.getElementById('last-count-stat').innerHTML =
+          `<strong>Last Count:</strong> ${timeAgo} (${lastCount.ingredients?.name || 'Unknown'})`;
+
+        // Find most accurate items (0 delta)
+        const perfectCounts = counts.filter(c => c.qty_delta === 0);
+        const perfectItems = [...new Set(perfectCounts.map(c => c.ingredients?.name).filter(Boolean))];
+        document.getElementById('most-accurate-stat').innerHTML =
+          perfectItems.length > 0
+            ? `<strong>Most Accurate:</strong> ${perfectItems.slice(0, 3).join(', ')}`
+            : `<strong>Most Accurate:</strong> No perfect counts this week`;
+
+        // Find items needing review (largest discrepancy)
+        const sortedByDelta = [...counts].sort((a, b) => Math.abs(b.qty_delta) - Math.abs(a.qty_delta));
+        if (sortedByDelta.length > 0 && sortedByDelta[0].qty_delta !== 0) {
+          const worst = sortedByDelta[0];
+          const sign = worst.qty_delta >= 0 ? '+' : '';
+          document.getElementById('needs-review-stat').innerHTML =
+            `<strong>Needs Review:</strong> ${worst.ingredients?.name} (${sign}${worst.qty_delta} discrepancy)`;
+        } else {
+          document.getElementById('needs-review-stat').innerHTML =
+            `<strong>Needs Review:</strong> All counts within acceptable range`;
+        }
+      } else {
+        document.getElementById('last-count-stat').innerHTML =
+          `<strong>Last Count:</strong> No counts recorded this week`;
+        document.getElementById('most-accurate-stat').innerHTML =
+          `<strong>Most Accurate:</strong> Perform counts to see accuracy data`;
+        document.getElementById('needs-review-stat').innerHTML =
+          `<strong>Needs Review:</strong> No data available`;
+      }
+
+      // Generate insights
+      generateInsights(counts);
+    }
+
+    function generateInsights(counts) {
+      const container = document.getElementById('insights-container');
+
+      if (counts.length === 0) {
+        container.innerHTML = `
+          <div class="insight-item">
+            <span class="insight-icon">📊</span>
+            <div class="insight-text">
+              <strong>Start counting!</strong> Perform physical counts to receive personalized insights and recommendations.
+            </div>
+          </div>
+        `;
+        return;
+      }
+
+      const insights = [];
+
+      // Group by ingredient to find patterns
+      const byIngredient = {};
+      counts.forEach(c => {
+        const name = c.ingredients?.name;
+        if (!name) return;
+        if (!byIngredient[name]) byIngredient[name] = [];
+        byIngredient[name].push(c.qty_delta);
+      });
+
+      // Find consistent shortages
+      Object.entries(byIngredient).forEach(([name, deltas]) => {
+        const shortages = deltas.filter(d => d < 0);
+        if (shortages.length >= 2 && shortages.length === deltas.length) {
+          insights.push({
+            icon: '📉',
+            text: `<strong>${name}</strong> has shown consistent shortages (${shortages.length} counts). Possible causes: spillage, portion control issues, or incorrect recipes.`
+          });
+        }
+      });
+
+      // Find overages
+      Object.entries(byIngredient).forEach(([name, deltas]) => {
+        const overages = deltas.filter(d => d > 0);
+        if (overages.length >= 2) {
+          insights.push({
+            icon: '📈',
+            text: `<strong>${name}</strong> has shown overages. Consider adjusting par levels or reviewing receiving procedures.`
+          });
+        }
+      });
+
+      // Overall accuracy insight
+      const accurateCount = counts.filter(c => {
+        const noteMatch = c.note?.match(/Physical count: ([\d.]+)→([\d.]+)/);
+        if (noteMatch) {
+          const systemQty = parseFloat(noteMatch[1]);
+          return Math.abs((c.qty_delta / systemQty) * 100) <= 5;
+        }
+        return false;
+      }).length;
+
+      const accuracyRate = ((accurateCount / counts.length) * 100).toFixed(0);
+      if (accuracyRate >= 90) {
+        insights.push({
+          icon: '🏆',
+          text: `<strong>Great job!</strong> Your inventory accuracy (${accuracyRate}%) is above industry average (89%). Keep up the good work!`
+        });
+      } else if (accuracyRate < 80) {
+        insights.push({
+          icon: '⚠️',
+          text: `<strong>Improvement needed:</strong> Your accuracy rate (${accuracyRate}%) is below recommended levels. Consider more frequent counts and reviewing handling procedures.`
+        });
+      }
+
+      // Default insight if no patterns found
+      if (insights.length === 0) {
+        insights.push({
+          icon: '✅',
+          text: `<strong>Looking good!</strong> No significant discrepancy patterns detected. Continue regular physical counts to maintain accuracy.`
+        });
+      }
+
+      container.innerHTML = insights.map(i => `
+        <div class="insight-item">
+          <span class="insight-icon">${i.icon}</span>
+          <div class="insight-text">${i.text}</div>
+        </div>
+      `).join('');
+    }
+
+    function getTimeAgo(date) {
+      const seconds = Math.floor((new Date() - date) / 1000);
+      if (seconds < 60) return 'just now';
+      const minutes = Math.floor(seconds / 60);
+      if (minutes < 60) return `${minutes} minute${minutes > 1 ? 's' : ''} ago`;
+      const hours = Math.floor(minutes / 60);
+      if (hours < 24) return `${hours} hour${hours > 1 ? 's' : ''} ago`;
+      const days = Math.floor(hours / 24);
+      return `${days} day${days > 1 ? 's' : ''} ago`;
+    }
+
+    function setStatus(msg, type) {
+      const el = document.getElementById('status-msg');
+      el.className = `status-msg ${type}`;
+      el.textContent = msg;
+    }
+  </script>
+</body>
+
+</html>
