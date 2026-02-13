@@ -2,5 +2,7 @@ supabase/.temp
 node_modules/
 .env
 Frontend/js/config.js
-.vercel
 Frontend/js/env.js
+.vercel
+Readme.md
+Readme.md

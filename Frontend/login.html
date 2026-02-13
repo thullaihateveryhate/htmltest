@@ -180,6 +180,48 @@
       color: #86868b;
       font-size: 12px;
     }
+
+    .demo-box {
+      margin-top: 24px;
+      background-color: #f5f5f7;
+      border-radius: 12px;
+      padding: 16px;
+      text-align: left;
+    }
+
+    .demo-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-main);
+      margin-bottom: 8px;
+    }
+
+    .demo-text {
+      font-size: 14px;
+      color: var(--text-sub);
+      margin-bottom: 4px;
+      line-height: 1.5;
+    }
+
+    .demo-text strong {
+      color: var(--text-main);
+      font-weight: 600;
+    }
+
+    .auto-fill-link {
+      display: inline-flex;
+      align-items: center;
+      margin-top: 8px;
+      color: var(--blue);
+      font-size: 14px;
+      font-weight: 600;
+      text-decoration: none;
+      cursor: pointer;
+    }
+
+    .auto-fill-link:hover {
+      text-decoration: underline;
+    }
   </style>
 </head>
 
@@ -204,9 +246,12 @@
         Continue
       </button>
 
-      <div class="divider">or</div>
-
-      <a href="#" class="create-account-link" onclick="doSignUp(); return false;">Create your Stockd account</a>
+      <div class="demo-box">
+        <div class="demo-title">Want to try the demo?</div>
+        <div class="demo-text">Email: <strong>demo@user.pizza</strong></div>
+        <div class="demo-text">Pass: <strong>admin</strong></div>
+        <a class="auto-fill-link" onclick="autoFillDemo()">✨ Tap to auto-fill</a>
+      </div>
     </div>
 
     <div class="footer-text">
@@ -287,6 +332,11 @@
         btn.disabled = loading;
         btn.textContent = loading ? 'Signing in...' : 'Continue';
       }
+    }
+
+    function autoFillDemo() {
+      document.getElementById('email').value = 'demo@user.pizza';
+      document.getElementById('password').value = 'admin';
     }
   </script>
 </body>
