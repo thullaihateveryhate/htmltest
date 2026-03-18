@@ -2,7 +2,10 @@
 // gemini-client.js — Gemini AI Client with Function Calling
 // ═══════════════════════════════════════════════════════════════
 
-const GEMINI_ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
+const DEFAULT_GEMINI_MODEL = 'gemini-2.5-flash';
+const ACTIVE_GEMINI_MODEL =
+    (typeof GEMINI_MODEL !== 'undefined' && GEMINI_MODEL) || DEFAULT_GEMINI_MODEL;
+const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${ACTIVE_GEMINI_MODEL}:generateContent`;
 
 // ─── Tool Definitions for Function Calling ─────────────────────
 
@@ -749,4 +752,3 @@ try {
     console.warn('GeminiChat init failed:', e);
     geminiChat = null;
 }
-

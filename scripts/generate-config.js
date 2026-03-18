@@ -38,11 +38,13 @@ const envOutPath = path.join(__dirname, '..', 'Frontend', 'js', 'env.js');
 fs.writeFileSync(envOutPath, envContent);
 console.log('✅ Frontend/js/env.js generated from .env');
 
-// Write config.js (Gemini key etc.)
+// Write config.js (Gemini key/model etc.)
 const geminiKey = env.GEMINI_API_KEY || process.env.GEMINI_API_KEY || '';
+const geminiModel = env.GEMINI_MODEL || process.env.GEMINI_MODEL || 'gemini-2.5-flash';
 const configContent = `// AUTO-GENERATED — do not edit, do not commit
 // Run "npm run config" to regenerate from .env
 GEMINI_API_KEY = "${geminiKey}";
+GEMINI_MODEL = "${geminiModel}";
 `;
 
 const outPath = path.join(__dirname, '..', 'Frontend', 'js', 'config.js');

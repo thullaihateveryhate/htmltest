@@ -6,6 +6,7 @@
   "scripts": {
     "test": "jest --runInBand --verbose",
     "test:watch": "jest --runInBand --watch",
+    "build": "npm run config",
     "config": "node scripts/generate-config.js",
     "start": "npx serve Frontend",
     "start:backend": "node Backend/server.js",
