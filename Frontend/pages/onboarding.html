@@ -82,12 +82,25 @@
   <!-- Scripts -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="../js/security.js"></script>
   <script src="../js/env.js"></script>
   <script src="../js/supabase-client.js"></script>
+  <script src="../js/monitoring-client.js"></script>
   <script src="../js/csv-parser.js"></script>
   <script>
+    const { escapeHtml } = window.StockdSecurity;
+    const monitoring = window.stockdMonitoring;
+
     // ─── State ───────────────────────────────
     let parsedData = null;
+
+    async function trackMonitoring(eventType, options) {
+      if (!monitoring || typeof monitoring.trackEvent !== 'function') {
+        return { ok: false, skipped: true };
+      }
+
+      return monitoring.trackEvent(eventType, options);
+    }
 
     // ─── Init ────────────────────────────────
     (async () => {
@@ -121,12 +134,57 @@
 
     async function handleFile(file) {
       setStatus('📄 Parsing CSV...', 'info');
+      await trackMonitoring('csv_upload_attempted', {
+        flow: 'onboarding_sales_history',
+        metadata: {
+          page: 'onboarding',
+          file_name: file && file.name ? file.name : 'unknown.csv',
+          file_size_bytes: file && typeof file.size === 'number' ? file.size : null,
+          mime_type: file && file.type ? file.type : null
+        }
+      });
       try {
         parsedData = await parseToastCSV(file);
+        const s = parsedData.stats;
+        if (s.rejectedRows > 0 || s.parseErrors > 0 || s.suspiciousRows > 0 || s.sanitizedFieldCount > 0) {
+          await trackMonitoring('csv_validation_failure', {
+            flow: 'onboarding_sales_history',
+            metadata: {
+              page: 'onboarding',
+              raw_rows: s.rawRows,
+              aggregated_rows: s.aggregatedRows,
+              rejected_rows: s.rejectedRows,
+              invalid_date_rows: s.invalidDateRows,
+              invalid_numeric_rows: s.invalidNumericRows,
+              parse_errors: s.parseErrors,
+              suspicious_rows: s.suspiciousRows,
+              sanitized_field_count: s.sanitizedFieldCount
+            }
+          });
+        }
+        if (s.suspiciousRows > 0 || s.sanitizedFieldCount > 0) {
+          await trackMonitoring('suspicious_input_detected', {
+            flow: 'onboarding_sales_history',
+            metadata: {
+              page: 'onboarding',
+              field_name: 'csv_rows',
+              suspicious_rows: s.suspiciousRows,
+              sanitized_field_count: s.sanitizedFieldCount
+            }
+          });
+        }
         showPreview(parsedData.stats);
         document.getElementById('step1-num').classList.add('done');
         document.getElementById('step1-num').textContent = '✓';
       } catch (err) {
+        await trackMonitoring('csv_validation_failure', {
+          flow: 'onboarding_sales_history',
+          metadata: {
+            page: 'onboarding',
+            parse_exception: true,
+            error_message: err && err.message ? err.message : 'CSV parse failed'
+          }
+        });
         setStatus('❌ ' + err.message, 'error');
       }
     }
@@ -141,7 +199,7 @@
           <div class="stat-row"><span class="label">Aggregated rows</span><span class="value">${s.aggregatedRows.toLocaleString()}</span></div>
           <div class="stat-row"><span class="label">Unique menu items</span><span class="value">${s.uniqueItems}</span></div>
           <div class="stat-row"><span class="label">Categories</span><span class="value">${s.uniqueCategories}</span></div>
-          <div class="stat-row"><span class="label">Date range</span><span class="value">${s.startDate} → ${s.endDate} (${s.totalDays} days)</span></div>
+          <div class="stat-row"><span class="label">Date range</span><span class="value">${escapeHtml(s.startDate || '—')} → ${escapeHtml(s.endDate || '—')} (${s.totalDays} days)</span></div>
           <div class="stat-row"><span class="label">Total units sold</span><span class="value">${Math.round(s.totalQty).toLocaleString()}</span></div>
           <div class="stat-row"><span class="label">Total net sales</span><span class="value">$${s.totalSales.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
         </div>
@@ -185,6 +243,17 @@
 
         const msg = `🎉 Setup complete! ${closeData.dates_processed} dates processed, ` +
           `${closeData.total_consume_txns} consumption transactions. Redirecting...`;
+        await trackMonitoring('csv_upload_completed', {
+          flow: 'onboarding_sales_history',
+          metadata: {
+            page: 'onboarding',
+            processed_rows: result.totalProcessed,
+            menu_items_created: result.totalItemsCreated,
+            dates_processed: closeData.dates_processed,
+            consumption_transactions: closeData.total_consume_txns,
+            aggregated_rows: parsedData.stats.aggregatedRows
+          }
+        });
         setStatus(msg, 'success');
 
         setTimeout(() => window.location.href = 'dashboard.html', 3000);

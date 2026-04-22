@@ -117,12 +117,17 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="../js/security.js"></script>
+  <script src="../js/database-helpers.js"></script>
   <script src="../js/env.js"></script>
   <script src="../js/supabase-client.js"></script>
   <script src="../js/ai-client.js"></script>
   <script src="../js/ai-copilot.js"></script>
   <script src="../js/animated-counter.js"></script>
   <script>
+    const { parseFiniteNumber, safeEnum, sanitizeTextInput } = window.StockdSecurity;
+    const { buildTopSellerStats } = window.StockdDatabase;
+
     function go(page) { window.location.href = page + '.html'; }
 
     let salesData = [];
@@ -235,7 +240,7 @@
           <div style="padding:20px; text-align:center; color:#FF453A;">
             <div style="font-size:24px; margin-bottom:8px;">⚠️</div>
             <div>Unable to load recommendations</div>
-            <div style="font-size:12px; margin-top:4px; opacity:0.7;">${error.message}</div>
+            <div style="font-size:12px; margin-top:4px; opacity:0.7;">${escapeHtml(sanitizeTextInput(error && error.message ? error.message : 'Unknown error', { maxLength: 180 }))}</div>
             <button onclick="fetchPricingRecommendations()" style="margin-top:12px; background:#3A3A3C; border:none; color:#FFF; padding:6px 12px; border-radius:6px; font-size:12px; cursor:pointer;">Retry</button>
           </div>
         `;
@@ -382,12 +387,7 @@
     }
 
     function escapeHtml(value) {
-      return String(value == null ? '' : value)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
+      return window.StockdSecurity.escapeHtml(value);
     }
 
     function renderPricingRecommendations(recommendations, options = {}) {
@@ -654,74 +654,51 @@
     }
 
     async function loadTopSellers() {
-      // Get all sales aggregated by menu item
+      const today = new Date().toISOString().split('T')[0];
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - 90);
+      const startDateKey = startDate.toISOString().split('T')[0];
+
       const { data, error } = await sb
         .from('sales_line_items')
-        .select('menu_item_id, menu_items(name, category), qty, net_sales');
+        .select('business_date, menu_item_id, menu_items(name, category), qty, net_sales')
+        .gte('business_date', startDateKey)
+        .lte('business_date', today);
 
-      if (error || !data || data.length === 0) {
-        // Use demo data for pizza place
-        const demoItems = [
-          { name: 'Pepperoni Pizza', qty: 342 },
-          { name: 'Margherita Pizza', qty: 298 },
-          { name: 'BBQ Chicken Pizza', qty: 267 },
-          { name: 'Veggie Supreme', qty: 189 },
-          { name: 'Buffalo Wings', qty: 156 }
-        ];
-
-        const maxQty = demoItems[0].qty;
-
-        document.getElementById('top-sellers').innerHTML = demoItems.map((item, idx) => {
-          const percentage = (item.qty / maxQty * 100);
-          return `
-          <div style="display:flex; align-items:center; gap:12px;">
-            <div style="color:#8E8E93; font-size:18px; font-weight:700; width:24px; text-align:center;">#${idx + 1}</div>
-            <div style="flex:1;">
-              <div style="color:#FFF; font-size:15px; font-weight:600; margin-bottom:4px;">${item.name}</div>
-              <div style="display:flex; align-items:center; gap:8px;">
-                <div style="flex:1; height:6px; background:#2C2C2E; border-radius:3px; overflow:hidden;">
-                  <div style="height:100%; width:${percentage}%; background:linear-gradient(90deg, #30D158 0%, #34C759 100%); border-radius:3px;"></div>
-                </div>
-                <div style="color:#AEAEB2; font-size:13px; font-weight:600; min-width:60px; text-align:right;">${Math.round(item.qty)} sold</div>
-              </div>
-            </div>
+      if (error) {
+        document.getElementById('top-sellers').innerHTML = `
+          <div style="padding:20px; text-align:center; color:#FF453A;">
+            Unable to load top sellers from the database.
           </div>
         `;
-        }).join('');
         return;
       }
 
-      // Aggregate by menu item
-      const itemStats = {};
-      data.forEach(row => {
-        const id = row.menu_item_id;
-        const name = row.menu_items?.name || 'Unknown Item';
-        if (!itemStats[id]) {
-          itemStats[id] = { id, name, qty: 0, revenue: 0 };
-        }
-        itemStats[id].qty += row.qty;
-        itemStats[id].revenue += row.net_sales;
-      });
+      const topItems = buildTopSellerStats(data || [], { limit: 5, excludeTests: true });
 
-      // Sort and get top 5
-      const topItems = Object.values(itemStats)
-        .sort((a, b) => b.qty - a.qty)
-        .slice(0, 5);
+      if (topItems.length === 0) {
+        document.getElementById('top-sellers').innerHTML = `
+          <div style="padding:30px; text-align:center; color:#8E8E93;">
+            No stored sales line items are available for this window yet.
+          </div>
+        `;
+        return;
+      }
 
-      const maxQty = topItems[0]?.qty || 1;
+      const maxQty = topItems[0]?.totalQty || 1;
 
       document.getElementById('top-sellers').innerHTML = topItems.map((item, idx) => {
-        const percentage = (item.qty / maxQty * 100);
+        const percentage = (item.totalQty / maxQty * 100);
         return `
           <div style="display:flex; align-items:center; gap:12px;">
             <div style="color:#8E8E93; font-size:18px; font-weight:700; width:24px; text-align:center;">#${idx + 1}</div>
             <div style="flex:1;">
-              <div style="color:#FFF; font-size:15px; font-weight:600; margin-bottom:4px;">${item.name}</div>
+              <div style="color:#FFF; font-size:15px; font-weight:600; margin-bottom:4px;">${escapeHtml(sanitizeTextInput(item.name, { maxLength: 160 }))}</div>
               <div style="display:flex; align-items:center; gap:8px;">
                 <div style="flex:1; height:6px; background:#2C2C2E; border-radius:3px; overflow:hidden;">
                   <div style="height:100%; width:${percentage}%; background:linear-gradient(90deg, #30D158 0%, #34C759 100%); border-radius:3px;"></div>
                 </div>
-                <div style="color:#AEAEB2; font-size:13px; font-weight:600; min-width:60px; text-align:right;">${Math.round(item.qty)} sold</div>
+                <div style="color:#AEAEB2; font-size:13px; font-weight:600; min-width:60px; text-align:right;">${Math.round(item.totalQty)} sold</div>
               </div>
             </div>
           </div>
@@ -850,7 +827,7 @@
             <div style="padding:20px; text-align:center; color:#FF453A;">
                 <div style="font-size:24px; margin-bottom:8px;">⚠️</div>
                 <div>Unable to load sales data</div>
-                <div style="font-size:12px; margin-top:4px; opacity:0.7;">${error.message}</div>
+                <div style="font-size:12px; margin-top:4px; opacity:0.7;">${escapeHtml(sanitizeTextInput(error && error.message ? error.message : 'Unknown error', { maxLength: 180 }))}</div>
                 <button onclick="fetchRecentDailySales()" style="margin-top:12px; background:#3A3A3C; border:none; color:#FFF; padding:6px 12px; border-radius:6px; font-size:12px; cursor:pointer;">Retry</button>
             </div>
         `;
@@ -858,107 +835,26 @@
     }
 
     async function loadOrderData() {
-      // Get order data with timestamps
+      const today = new Date().toISOString().split('T')[0];
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - 28);
+      const startDateKey = startDate.toISOString().split('T')[0];
+
       const { data, error } = await sb
         .from('daily_orders')
-        .select('order_time, order_hour');
+        .select('opened_at, business_date')
+        .gte('business_date', startDateKey)
+        .lte('business_date', today)
+        .eq('voided', false)
+        .not('opened_at', 'is', null);
 
       if (error) {
         console.error('Error loading order data:', error);
-      }
-
-      if (!data || data.length === 0) {
-        console.warn('No order data found - using demo data for pizza place');
-        orderData = generateDemoData();
+        orderData = [];
         return;
       }
 
-      console.log('Loaded order data:', data.length, 'orders');
-      orderData = data;
-    }
-
-    // Generate realistic demo data for a pizza place with UNIQUE patterns per day
-    function generateDemoData() {
-      const demoOrders = [];
-      const now = new Date();
-
-      // Unique hourly patterns for each day of the week
-      // Format: { hour: orderCount }
-      const dailyPatterns = {
-        0: { // SUNDAY - Family dinner day, moderate brunch
-          9: 3, 10: 8, 11: 15, 12: 28, 13: 22, 14: 12,
-          15: 6, 16: 10, 17: 22,
-          18: 45, 19: 52, 20: 42, 21: 28, // Peak at 7PM
-          22: 15, 23: 8, 0: 4
-        },
-        1: { // MONDAY - Slowest day, light lunch, moderate dinner
-          9: 2, 10: 3, 11: 8, 12: 22, 13: 18, 14: 10,
-          15: 5, 16: 7, 17: 14,
-          18: 32, 19: 28, 20: 22, 21: 15, // Peak at 6PM
-          22: 8, 23: 4, 0: 2
-        },
-        2: { // TUESDAY - Slightly busier than Monday
-          9: 2, 10: 4, 11: 10, 12: 25, 13: 20, 14: 12,
-          15: 6, 16: 8, 17: 16,
-          18: 35, 19: 38, 20: 30, 21: 18, // Peak at 7PM
-          22: 10, 23: 5, 0: 2
-        },
-        3: { // WEDNESDAY - Mid-week bump
-          9: 3, 10: 5, 11: 12, 12: 30, 13: 25, 14: 15,
-          15: 8, 16: 10, 17: 20,
-          18: 40, 19: 45, 20: 35, 21: 22, // Peak at 7PM
-          22: 12, 23: 6, 0: 3
-        },
-        4: { // THURSDAY - Pre-weekend surge
-          9: 3, 10: 6, 11: 14, 12: 32, 13: 28, 14: 16,
-          15: 9, 16: 12, 17: 25,
-          18: 42, 19: 48, 20: 52, 21: 38, // Peak at 8PM
-          22: 22, 23: 12, 0: 5
-        },
-        5: { // FRIDAY - Busiest night
-          9: 4, 10: 8, 11: 16, 12: 35, 13: 30, 14: 18,
-          15: 12, 16: 18, 17: 32,
-          18: 55, 19: 62, 20: 68, 21: 55, // Peak at 8PM - highest!
-          22: 35, 23: 20, 0: 10
-        },
-        6: { // SATURDAY - Weekend peak, strong brunch
-          9: 8, 10: 18, 11: 28, 12: 35, 13: 30, 14: 22, // Strong brunch
-          15: 15, 16: 20, 17: 35,
-          18: 58, 19: 65, 20: 55, 21: 42, // Peak at 7PM
-          22: 28, 23: 15, 0: 8
-        }
-      };
-
-      for (let i = 0; i < 7; i++) {
-        const d = new Date(now);
-        d.setDate(d.getDate() - i);
-        const dayOfWeek = d.getDay();
-        const pattern = dailyPatterns[dayOfWeek];
-
-        // Generate orders for each hour based on pattern
-        for (let hour = 9; hour <= 23; hour++) {
-          const count = pattern[hour] || 0;
-          // Add some randomness +/- 20%
-          const actualCount = Math.max(0, Math.round(count * (0.8 + Math.random() * 0.4)));
-
-          for (let k = 0; k < actualCount; k++) {
-            // Random minute
-            const minute = Math.floor(Math.random() * 60);
-            const orderTime = new Date(d);
-            orderTime.setHours(hour, minute, 0, 0);
-
-            // Removed future check to show full day pattern
-            // if (d.getDate() === now.getDate() && orderTime > now) continue;
-
-            demoOrders.push({
-              order_time: orderTime.toISOString(),
-              order_hour: hour
-            });
-          }
-        }
-      }
-
-      return demoOrders;
+      orderData = data || [];
     }
 
     function renderDayTabs() {
@@ -984,25 +880,46 @@
     }
 
     function selectDay(dayIndex) {
-      selectedDay = dayIndex;
+      const normalizedDay = parseFiniteNumber(dayIndex, { integer: true, min: 0, max: 6 });
+      selectedDay = normalizedDay === null ? new Date().getDay() : normalizedDay;
       renderDayTabs();
       renderPopularTimes();
     }
 
     function renderPopularTimes() {
-      // Calculate busy data based on orderData
-      // If no orderData (still loading), show skeleton? 
-      // Assuming orderData is populated or demo data used
-      // Filter orders by selected day of week
+      if (!Array.isArray(orderData) || orderData.length === 0) {
+        document.getElementById('peak-label').innerHTML = `
+          <div style="color:#8E8E93; font-size:13px; font-weight:500;">No order timing data has been stored yet.</div>
+        `;
+        document.getElementById('popular-times-chart').innerHTML = `
+          <div style="height:100%; display:flex; align-items:center; justify-content:center; color:#8E8E93; font-size:13px;">
+            Upload order-level data to populate traffic patterns.
+          </div>
+        `;
+        return;
+      }
+
       const relevantOrders = orderData.filter(o => {
-        const d = new Date(o.order_time);
+        const d = new Date(o.opened_at);
         return d.getDay() === selectedDay;
       });
+
+      if (relevantOrders.length === 0) {
+        document.getElementById('peak-label').innerHTML = `
+          <div style="color:#8E8E93; font-size:13px; font-weight:500;">No stored order timestamps for this weekday yet.</div>
+        `;
+        document.getElementById('popular-times-chart').innerHTML = `
+          <div style="height:100%; display:flex; align-items:center; justify-content:center; color:#8E8E93; font-size:13px;">
+            Try another day tab or ingest more daily order data.
+          </div>
+        `;
+        return;
+      }
 
       // Group by hour
       const hourlyCounts = new Array(24).fill(0);
       relevantOrders.forEach(o => {
-        const h = new Date(o.order_time).getHours();
+        const h = new Date(o.opened_at).getHours();
         hourlyCounts[h]++;
       });
 
@@ -1030,7 +947,7 @@
       }
 
       document.getElementById('peak-label').innerHTML = `
-        <div style="color:#8E8E93; font-size:13px; font-weight:500;">${labelText}</div>
+        <div style="color:#8E8E93; font-size:13px; font-weight:500;">${escapeHtml(labelText)}</div>
       `;
 
       // Render Chart

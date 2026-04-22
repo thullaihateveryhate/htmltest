@@ -1,0 +1,439 @@
+{
+  "generated_at": "2026-04-22T09:18:00.000Z",
+  "source": "fixture",
+  "totals": {
+    "total_events": 16,
+    "by_severity": {
+      "warning": 10,
+      "info": 6
+    },
+    "by_event_type": {
+      "login_failure": 3,
+      "bruteforce_lockout_triggered": 2,
+      "csv_upload_attempted": 2,
+      "csv_validation_failure": 2,
+      "bruteforce_challenge_triggered": 1,
+      "copilot_security_rejection": 1,
+      "inventory_count_submission": 1,
+      "inventory_receive_action": 1,
+      "kiosk_login_attempt": 1,
+      "login_success": 1,
+      "suspicious_input_detected": 1
+    },
+    "by_source": {
+      "auth_edge": 8,
+      "frontend": 7,
+      "copilot_edge": 1
+    }
+  },
+  "windows": {
+    "last_hour": {
+      "total_events": 3,
+      "by_severity": {
+        "info": 2,
+        "warning": 1
+      },
+      "by_event_type": {
+        "csv_upload_attempted": 1,
+        "csv_validation_failure": 1,
+        "login_success": 1
+      }
+    },
+    "last_24_hours": {
+      "total_events": 16,
+      "by_severity": {
+        "warning": 10,
+        "info": 6
+      },
+      "by_event_type": {
+        "login_failure": 3,
+        "bruteforce_lockout_triggered": 2,
+        "csv_upload_attempted": 2,
+        "csv_validation_failure": 2,
+        "bruteforce_challenge_triggered": 1,
+        "copilot_security_rejection": 1,
+        "inventory_count_submission": 1,
+        "inventory_receive_action": 1,
+        "kiosk_login_attempt": 1,
+        "login_success": 1,
+        "suspicious_input_detected": 1
+      }
+    },
+    "last_7_days": {
+      "total_events": 16,
+      "by_severity": {
+        "warning": 10,
+        "info": 6
+      },
+      "by_event_type": {
+        "login_failure": 3,
+        "bruteforce_lockout_triggered": 2,
+        "csv_upload_attempted": 2,
+        "csv_validation_failure": 2,
+        "bruteforce_challenge_triggered": 1,
+        "copilot_security_rejection": 1,
+        "inventory_count_submission": 1,
+        "inventory_receive_action": 1,
+        "kiosk_login_attempt": 1,
+        "login_success": 1,
+        "suspicious_input_detected": 1
+      }
+    }
+  },
+  "security_counters": {
+    "login_failures": 3,
+    "login_successes": 1,
+    "challenge_events": 1,
+    "lockout_events": 2,
+    "suspicious_input_events": 1,
+    "csv_validation_failures": 2,
+    "copilot_rejections": 1
+  },
+  "top_event_types": [
+    {
+      "key": "login_failure",
+      "count": 3
+    },
+    {
+      "key": "bruteforce_lockout_triggered",
+      "count": 2
+    },
+    {
+      "key": "csv_upload_attempted",
+      "count": 2
+    },
+    {
+      "key": "csv_validation_failure",
+      "count": 2
+    },
+    {
+      "key": "bruteforce_challenge_triggered",
+      "count": 1
+    },
+    {
+      "key": "copilot_security_rejection",
+      "count": 1
+    },
+    {
+      "key": "inventory_count_submission",
+      "count": 1
+    },
+    {
+      "key": "inventory_receive_action",
+      "count": 1
+    },
+    {
+      "key": "kiosk_login_attempt",
+      "count": 1
+    },
+    {
+      "key": "login_success",
+      "count": 1
+    },
+    {
+      "key": "suspicious_input_detected",
+      "count": 1
+    }
+  ],
+  "top_sources": [
+    {
+      "key": "auth_edge",
+      "count": 8
+    },
+    {
+      "key": "frontend",
+      "count": 7
+    },
+    {
+      "key": "copilot_edge",
+      "count": 1
+    }
+  ],
+  "suspicious_findings": [
+    {
+      "id": "high_frequency_source:client-h1:2026-04-21T12:00:00.000Z",
+      "type": "high_frequency_source",
+      "severity": "medium",
+      "title": "High event volume from one source",
+      "summary": "9 monitored events were associated with the same hashed client/user scope.",
+      "count": 9,
+      "first_seen": "2026-04-21T12:00:00.000Z",
+      "last_seen": "2026-04-22T09:18:00.000Z",
+      "entity": "client-h1",
+      "metadata": {}
+    },
+    {
+      "id": "repeated_failed_logins:ident-h1:2026-04-21T12:00:00.000Z",
+      "type": "repeated_failed_logins",
+      "severity": "medium",
+      "title": "Repeated failed logins detected",
+      "summary": "3 failed logins were recorded for the same hashed identifier/device scope.",
+      "count": 3,
+      "first_seen": "2026-04-21T12:00:00.000Z",
+      "last_seen": "2026-04-21T12:04:20.000Z",
+      "entity": "ident-h1",
+      "metadata": {}
+    },
+    {
+      "id": "lockout_burst:2026-04-21T12:00:00.000Z:2026-04-21T12:00:00.000Z",
+      "type": "lockout_burst",
+      "severity": "medium",
+      "title": "Lockout burst detected",
+      "summary": "2 lockout events occurred inside the same 15-minute window.",
+      "count": 2,
+      "first_seen": "2026-04-21T12:00:00.000Z",
+      "last_seen": "2026-04-21T12:00:00.000Z",
+      "entity": "2026-04-21T12:00:00.000Z",
+      "metadata": {}
+    },
+    {
+      "id": "suspicious_input_attempts:security_inputs:2026-04-21T13:10:20.000Z",
+      "type": "suspicious_input_attempts",
+      "severity": "medium",
+      "title": "Suspicious input attempts recorded",
+      "summary": "1 security-relevant input events were detected or rejected.",
+      "count": 1,
+      "first_seen": "2026-04-21T13:10:20.000Z",
+      "last_seen": "2026-04-21T13:10:20.000Z",
+      "entity": "security_inputs",
+      "metadata": {}
+    },
+    {
+      "id": "csv_abuse_or_malformed_uploads:client-h3:2026-04-22T09:15:05.000Z",
+      "type": "csv_abuse_or_malformed_uploads",
+      "severity": "medium",
+      "title": "Malformed CSV upload activity detected",
+      "summary": "1 CSV validation failures were recorded, with 14 rejected rows in total.",
+      "count": 1,
+      "first_seen": "2026-04-22T09:15:05.000Z",
+      "last_seen": "2026-04-22T09:15:05.000Z",
+      "entity": "client-h3",
+      "metadata": {
+        "rejected_rows": 14
+      }
+    }
+  ],
+  "recent_events": [
+    {
+      "event_at": "2026-04-22T09:18:00.000Z",
+      "event_type": "login_success",
+      "severity": "info",
+      "source": "auth_edge",
+      "flow": "web_login",
+      "route": "/functions/v1/auth-login",
+      "request_id": "auth-s1",
+      "metadata": {
+        "failed_attempts_before_success": 4
+      }
+    },
+    {
+      "event_at": "2026-04-22T09:15:05.000Z",
+      "event_type": "csv_validation_failure",
+      "severity": "warning",
+      "source": "frontend",
+      "flow": "onboarding_sales_history",
+      "route": "/pages/onboarding.html",
+      "request_id": "ui-csv-2",
+      "metadata": {
+        "rejected_rows": 14,
+        "invalid_date_rows": 7,
+        "invalid_numeric_rows": 4,
+        "suspicious_rows": 1,
+        "sanitized_field_count": 1
+      }
+    },
+    {
+      "event_at": "2026-04-22T09:15:00.000Z",
+      "event_type": "csv_upload_attempted",
+      "severity": "info",
+      "source": "frontend",
+      "flow": "onboarding_sales_history",
+      "route": "/pages/onboarding.html",
+      "request_id": "ui-csv-2",
+      "metadata": {
+        "page": "onboarding",
+        "file_name": "history.csv",
+        "file_size_bytes": 128019
+      }
+    },
+    {
+      "event_at": "2026-04-21T15:00:00.000Z",
+      "event_type": "copilot_security_rejection",
+      "severity": "warning",
+      "source": "copilot_edge",
+      "flow": "copilot_data_access",
+      "route": "/functions/v1/copilot",
+      "request_id": "copilot-r1",
+      "metadata": {
+        "target_type": "rpc",
+        "target": "pg_sleep",
+        "reason": "invalid_supabase_target"
+      }
+    },
+    {
+      "event_at": "2026-04-21T14:20:00.000Z",
+      "event_type": "inventory_count_submission",
+      "severity": "info",
+      "source": "frontend",
+      "flow": "physical_count",
+      "route": "/pages/count.html",
+      "request_id": "ui-count-1",
+      "metadata": {
+        "ingredient_id": "ingredient-cheese",
+        "actual_qty": 45230,
+        "delta": -8.5
+      }
+    },
+    {
+      "event_at": "2026-04-21T14:00:00.000Z",
+      "event_type": "inventory_receive_action",
+      "severity": "info",
+      "source": "frontend",
+      "flow": "manual_receive",
+      "route": "/pages/receive.html",
+      "request_id": "ui-rec-1",
+      "metadata": {
+        "ingredient_id": "ingredient-olive",
+        "qty_received": 12.5,
+        "method": "manual"
+      }
+    },
+    {
+      "event_at": "2026-04-21T13:10:20.000Z",
+      "event_type": "suspicious_input_detected",
+      "severity": "warning",
+      "source": "frontend",
+      "flow": "daily_sales_upload",
+      "route": "/pages/upload.html",
+      "request_id": "ui-csv-1",
+      "metadata": {
+        "field_name": "csv_rows",
+        "signals": {
+          "contains_markup": true,
+          "contains_script_tag": true
+        },
+        "raw_length": 230,
+        "sanitized_length": 124
+      }
+    },
+    {
+      "event_at": "2026-04-21T13:10:10.000Z",
+      "event_type": "csv_validation_failure",
+      "severity": "warning",
+      "source": "frontend",
+      "flow": "daily_sales_upload",
+      "route": "/pages/upload.html",
+      "request_id": "ui-csv-1",
+      "metadata": {
+        "rejected_rows": 8,
+        "invalid_date_rows": 3,
+        "invalid_numeric_rows": 5,
+        "suspicious_rows": 2,
+        "sanitized_field_count": 3
+      }
+    },
+    {
+      "event_at": "2026-04-21T13:10:00.000Z",
+      "event_type": "csv_upload_attempted",
+      "severity": "info",
+      "source": "frontend",
+      "flow": "daily_sales_upload",
+      "route": "/pages/upload.html",
+      "request_id": "ui-csv-1",
+      "metadata": {
+        "page": "upload",
+        "file_name": "toast.csv",
+        "file_size_bytes": 48102
+      }
+    },
+    {
+      "event_at": "2026-04-21T12:06:40.000Z",
+      "event_type": "bruteforce_lockout_triggered",
+      "severity": "warning",
+      "source": "auth_edge",
+      "flow": "kiosk_login",
+      "route": "/functions/v1/auth-login",
+      "request_id": "auth-k2",
+      "metadata": {
+        "failed_attempts": 3,
+        "retry_after_ms": 30000
+      }
+    },
+    {
+      "event_at": "2026-04-21T12:06:00.000Z",
+      "event_type": "kiosk_login_attempt",
+      "severity": "info",
+      "source": "auth_edge",
+      "flow": "kiosk_login",
+      "route": "/functions/v1/auth-login",
+      "request_id": "auth-k1",
+      "metadata": {
+        "auth_state": "attempt_started"
+      }
+    },
+    {
+      "event_at": "2026-04-21T12:05:30.000Z",
+      "event_type": "bruteforce_lockout_triggered",
+      "severity": "warning",
+      "source": "auth_edge",
+      "flow": "web_login",
+      "route": "/functions/v1/auth-login",
+      "request_id": "auth-a5",
+      "metadata": {
+        "failed_attempts": 5,
+        "retry_after_ms": 30000
+      }
+    },
+    {
+      "event_at": "2026-04-21T12:04:20.000Z",
+      "event_type": "login_failure",
+      "severity": "warning",
+      "source": "auth_edge",
+      "flow": "web_login",
+      "route": "/functions/v1/auth-login",
+      "request_id": "auth-a4",
+      "metadata": {
+        "failed_attempts": 4
+      }
+    },
+    {
+      "event_at": "2026-04-21T12:03:10.000Z",
+      "event_type": "bruteforce_challenge_triggered",
+      "severity": "warning",
+      "source": "auth_edge",
+      "flow": "web_login",
+      "route": "/functions/v1/auth-login",
+      "request_id": "auth-a3",
+      "metadata": {
+        "failed_attempts": 3,
+        "challenge_required": true
+      }
+    },
+    {
+      "event_at": "2026-04-21T12:01:30.000Z",
+      "event_type": "login_failure",
+      "severity": "warning",
+      "source": "auth_edge",
+      "flow": "web_login",
+      "route": "/functions/v1/auth-login",
+      "request_id": "auth-a2",
+      "metadata": {
+        "failed_attempts": 2
+      }
+    },
+    {
+      "event_at": "2026-04-21T12:00:00.000Z",
+      "event_type": "login_failure",
+      "severity": "warning",
+      "source": "auth_edge",
+      "flow": "web_login",
+      "route": "/functions/v1/auth-login",
+      "request_id": "auth-a1",
+      "metadata": {
+        "failed_attempts": 1
+      }
+    }
+  ],
+  "narrative": "Monitoring flagged 5 suspicious patterns in the analyzed window. The most significant issue was \"high event volume from one source\", which accounted for 9 related events.",
+  "ai_assisted": false
+}

@@ -32,6 +32,7 @@
     <div class="topnav-links">
       <button class="topnav-link active" onclick="go('dashboard')">Dashboard</button>
       <button class="topnav-link" onclick="go('sales-analysis')">Sales Analysis</button>
+      <button class="topnav-link" onclick="go('security-monitoring')">Security</button>
       <button class="topnav-link" onclick="go('receive')">Receive</button>
       <button class="topnav-link" onclick="go('count')">Count</button>
     </div>
@@ -46,6 +47,16 @@
 
     <!-- Alert Banner (filled by JS) -->
     <div id="alert-banner"></div>
+
+    <div class="card animate-in" id="database-status-card" style="display:none; margin-bottom:24px;">
+      <div style="display:flex; align-items:flex-start; gap:12px;">
+        <div style="font-size:20px; line-height:1;">🗄️</div>
+        <div>
+          <div style="color:#FFF; font-size:15px; font-weight:700; margin-bottom:4px;">Live Database Status</div>
+          <div id="database-status-text" style="color:#AEAEB2; font-size:13px; line-height:1.5;"></div>
+        </div>
+      </div>
+    </div>
 
     <!-- KPI Cards -->
     <div class="grid-4" id="kpi-grid">
@@ -230,12 +241,17 @@
 
   <!-- Scripts -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="../js/security.js"></script>
+  <script src="../js/database-helpers.js"></script>
   <script src="../js/env.js"></script>
   <script src="../js/supabase-client.js"></script>
   <script src="../js/ai-client.js"></script>
   <script src="../js/ai-copilot.js"></script>
   <script src="../js/animated-counter.js"></script>
   <script>
+    const { escapeHtml, sanitizeTextInput } = window.StockdSecurity;
+    const { addDays, buildCategoryStats, buildDashboardForecastData, buildSalesTrend, buildTopSellerStats } = window.StockdDatabase;
+
     // ─── Navigation ──────────────────────────
     function go(page) { window.location.href = page + '.html'; }
 
@@ -249,20 +265,19 @@
     // ─── Main Load ───────────────────────────
     async function loadDashboard() {
       try {
-        const [inventory, salesTrend, topSellers, categories, menuCount] = await Promise.all([
+        const today = new Date().toISOString().split('T')[0];
+        const [inventory, salesRows, menuCount, forecastData] = await Promise.all([
           fetchInventory(),
-          fetchSalesTrend(),
-          fetchTopSellers(),
-          fetchCategories(),
-          fetchMenuItemCount()
+          fetchSalesDataset(90),
+          fetchMenuItemCount(),
+          fetchForecast(today)
         ]);
 
-        let forecastData = await fetchForecast();
-        if (!forecastData.menu_items || forecastData.menu_items.length === 0) {
-          console.log("Using mock forecast data");
-          forecastData = generateMockForecast(salesTrend, topSellers);
-        }
+        const salesTrend = buildSalesTrend(salesRows);
+        const topSellers = buildTopSellerStats(salesRows, { limit: 100, excludeTests: true });
+        const categories = buildCategoryStats(salesRows, { excludeTests: true });
 
+        renderDatabaseStatus(salesTrend, forecastData);
         renderKPIs(salesTrend, inventory, menuCount);
         renderRevenueChart(salesTrend);
         renderInventory(inventory);
@@ -280,42 +295,31 @@
       }
     }
 
-    function generateMockForecast(salesTrend, topSellers) {
-      // 1. Menu Items Forecast
-      const menuItems = topSellers.map(item => {
-        const dailyAvg = item.totalQty / 90;
-        return {
-          name: item.name,
-          category: item.category,
-          price: item.totalQty > 0 ? (item.totalSales / item.totalQty).toFixed(2) : "0.00",
-          avg_daily_sales: dailyAvg,
-          forecast_tomorrow: dailyAvg * (1 + (Math.random() * 0.2 - 0.1)), // +/- 10%
-        };
-      });
-
-      // 2. Daily Revenue Forecast (Next 7 days)
-      const last7Revenue = salesTrend.slice(-7);
-      const avgRev = last7Revenue.reduce((s, d) => s + d.revenue, 0) / (last7Revenue.length || 1);
-
-      const next7Days = [];
-      for (let i = 1; i <= 7; i++) {
-        const d = new Date();
-        d.setDate(d.getDate() + i);
-        next7Days.push({
-          date: d.toISOString().split('T')[0],
-          revenue: avgRev * (1 + (Math.random() * 0.2 - 0.1)) // +/- 10%
-        });
-      }
-
-      return { menu_items: menuItems, daily_revenue: next7Days };
-    }
-
     // ─── Data Fetchers ───────────────────────
 
     function getLookbackDate(days) {
       const d = new Date();
       d.setDate(d.getDate() - days);
       return d.toISOString().split('T')[0];
+    }
+
+    function getDateFromReference(referenceDate, daysBack) {
+      const safeReferenceDate = sanitizeTextInput(referenceDate, { maxLength: 10 });
+      const reference = new Date(`${safeReferenceDate}T00:00:00Z`);
+      reference.setUTCDate(reference.getUTCDate() - daysBack);
+      return reference.toISOString().slice(0, 10);
+    }
+
+    function formatBusinessDate(dateKey) {
+      if (!dateKey) return '—';
+      const parsed = new Date(`${dateKey}T12:00:00Z`);
+      if (Number.isNaN(parsed.getTime())) return escapeHtml(dateKey);
+      return parsed.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        timeZone: 'UTC'
+      });
     }
 
     async function fetchAllPaginated(tableName, selectColumns, filterFn) {
@@ -344,87 +348,58 @@
       return data || [];
     }
 
-    async function fetchForecast() {
+    async function fetchSalesDataset(days) {
+      const startDate = getLookbackDate(days);
+      const endDate = new Date().toISOString().split('T')[0];
+      return fetchAllPaginated(
+        'sales_line_items',
+        'business_date, menu_item_id, qty, net_sales, menu_items(name, category)',
+        (query) => query.gte('business_date', startDate).lte('business_date', endDate),
+      );
+    }
+
+    async function fetchForecast(referenceDate) {
+      const safeReferenceDate = sanitizeTextInput(referenceDate, { maxLength: 10 }) || new Date().toISOString().split('T')[0];
+      const forecastWindowStart = addDays(safeReferenceDate, 1);
+      const forecastWindowEnd = addDays(safeReferenceDate, 7);
+      const salesWindowStart = getDateFromReference(safeReferenceDate, 42);
+
       try {
-        const today = new Date().toISOString().split('T')[0];
-        const { data, error } = await sb.rpc('get_forecast', { p_reference_date: today });
-        if (error) {
-          console.warn("Forecast RPC failed", error);
-          // Fallback mock structure if RPC missing or error
-          return { daily_revenue: [], menu_items: [] };
+        const { error: generateError } = await sb.rpc('generate_forecast', {
+          p_days_ahead: 8,
+          p_reference_date: safeReferenceDate
+        });
+
+        if (generateError) {
+          console.warn('Forecast refresh failed', generateError);
         }
-        return data || { daily_revenue: [], menu_items: [] };
-      } catch (e) {
-        return { daily_revenue: [], menu_items: [] };
+
+        const [forecastRows, forecastSalesRows] = await Promise.all([
+          fetchAllPaginated(
+            'forecast_items',
+            'forecast_date, menu_item_id, qty, menu_items(name, category)',
+            (query) => query.gte('forecast_date', forecastWindowStart).lte('forecast_date', forecastWindowEnd),
+          ),
+          fetchAllPaginated(
+            'sales_line_items',
+            'business_date, menu_item_id, qty, net_sales, menu_items(name, category)',
+            (query) => query.gte('business_date', salesWindowStart).lt('business_date', safeReferenceDate),
+          ),
+        ]);
+
+        return buildDashboardForecastData({
+          referenceDate: safeReferenceDate,
+          forecastRows,
+          salesRows: forecastSalesRows,
+        });
+      } catch (error) {
+        console.warn('Forecast data fetch failed', error);
+        return buildDashboardForecastData({
+          referenceDate: safeReferenceDate,
+          forecastRows: [],
+          salesRows: [],
+        });
       }
-    }
-
-    async function fetchSalesTrend() {
-      // 90 day lookback for trend
-      const dateStr = getLookbackDate(90);
-      const data = await fetchAllPaginated('sales_line_items', 'business_date, qty, net_sales', q => q.gte('business_date', dateStr));
-
-      const byDate = {};
-      data.forEach(r => {
-        if (!byDate[r.business_date]) {
-          byDate[r.business_date] = { date: r.business_date, revenue: 0, orders: 0 };
-        }
-        byDate[r.business_date].revenue += r.net_sales;
-        byDate[r.business_date].orders += r.qty;
-      });
-
-      return Object.values(byDate).sort((a, b) => a.date.localeCompare(b.date));
-    }
-
-    async function fetchTopSellers() {
-      // 90 day lookback for top sellers
-      const dateStr = getLookbackDate(90);
-      const data = await fetchAllPaginated('sales_line_items', 'menu_item_id, qty, net_sales, menu_items(name, category)', q => q.gte('business_date', dateStr));
-
-      const byItem = {};
-      data.forEach(r => {
-        const id = r.menu_item_id;
-        if (!byItem[id]) {
-          byItem[id] = {
-            name: r.menu_items?.name || 'Unknown',
-            category: r.menu_items?.category || '',
-            totalQty: 0,
-            totalSales: 0
-          };
-        }
-
-        // Skip test items
-        if (byItem[id].name.startsWith('__') || (byItem[id].category && byItem[id].category.toLowerCase().includes('test'))) {
-          return;
-        }
-
-        byItem[id].totalQty += r.qty;
-        byItem[id].totalSales += r.net_sales;
-      });
-
-      return Object.values(byItem)
-        .sort((a, b) => b.totalQty - a.totalQty)
-        .slice(0, 100);
-    }
-
-    async function fetchCategories() {
-      // 90 day lookback for categories
-      const dateStr = getLookbackDate(90);
-      const data = await fetchAllPaginated('sales_line_items', 'qty, net_sales, menu_items(category)', q => q.gte('business_date', dateStr));
-
-      const byCat = {};
-      data.forEach(r => {
-        const cat = r.menu_items?.category || 'Other';
-        if (!byCat[cat]) byCat[cat] = { name: cat, sales: 0, qty: 0 };
-
-        // Skip test categories
-        if (cat.toLowerCase().includes('test')) return;
-
-        byCat[cat].sales += r.net_sales;
-        byCat[cat].qty += r.qty;
-      });
-
-      return Object.values(byCat).sort((a, b) => b.sales - a.sales);
     }
 
     async function fetchMenuItemCount() {
@@ -432,6 +407,32 @@
         .from('menu_items')
         .select('id', { count: 'exact', head: true });
       return count || 0;
+    }
+
+    function renderDatabaseStatus(salesTrend, forecastData) {
+      const card = document.getElementById('database-status-card');
+      const textEl = document.getElementById('database-status-text');
+      if (!card || !textEl) return;
+
+      const latestSalesDate = forecastData?.latest_sales_date || salesTrend[salesTrend.length - 1]?.date || null;
+      const forecastStartDate = forecastData?.daily_revenue?.[0]?.date || null;
+      const forecastEndDate = forecastData?.daily_revenue?.[forecastData.daily_revenue.length - 1]?.date || null;
+
+      if (!latestSalesDate) {
+        textEl.textContent = 'No recent sales history is stored yet. Upload a sales CSV to populate Postgres tables and unlock live forecasts.';
+        card.style.display = 'block';
+        return;
+      }
+
+      const recentSalesDays = salesTrend.length;
+      const forecastWindowText = forecastStartDate && forecastEndDate
+        ? `${formatBusinessDate(forecastStartDate)} to ${formatBusinessDate(forecastEndDate)}`
+        : 'No persisted forecast rows yet';
+
+      textEl.textContent =
+        `Live Supabase data: ${recentSalesDays} recent sales days loaded through ${formatBusinessDate(latestSalesDate)}. ` +
+        `Forecast tables were refreshed for ${forecastWindowText}. Inventory receives and counts persist to Postgres and appear after refresh.`;
+      card.style.display = 'block';
     }
 
     // ─── Renderers ───────────────────────────
@@ -478,12 +479,13 @@
 
       // Alert banner
       if (alerts > 0) {
+        const criticalItem = sanitizeTextInput(inventory.filter(i => i.status === 'critical')[0]?.name || 'Items', { maxLength: 160 });
         document.getElementById('alert-banner').innerHTML = `
           <div class="alert-banner critical">
             <div class="alert-icon" style="animation:pulse 1.5s infinite;">⚠️</div>
             <div class="alert-body">
               <div class="alert-title">${critical} Critical · ${reorder} Reorder Soon</div>
-              <div class="alert-text">${inventory.filter(i => i.status === 'critical')[0]?.name || 'Items'} need immediate attention</div>
+              <div class="alert-text">${escapeHtml(criticalItem)} need immediate attention</div>
             </div>
             <button class="btn btn-danger" onclick="document.getElementById('inventory-table').scrollIntoView({behavior:'smooth'})">View</button>
           </div>
@@ -503,7 +505,10 @@
 
       const tbody = document.getElementById('inventory-tbody');
       tbody.innerHTML = items.map(i => {
-        const status = i.status || 'unknown';
+        const status = sanitizeTextInput(i.status || 'unknown', { maxLength: 32 });
+        const safeName = escapeHtml(sanitizeTextInput(i.name, { maxLength: 160 }));
+        const safeUnit = escapeHtml(sanitizeTextInput(i.unit || '', { maxLength: 32 }));
+        const safeStatusLabel = escapeHtml(status.replace('_', ' '));
         const badgeClass = status === 'critical' ? 'badge-critical-dark'
           : status === 'reorder_soon' ? 'badge-warning-dark'
             : status === 'unknown' ? 'badge-unknown'
@@ -525,14 +530,14 @@
         const suggested = Math.max(0, par - i.qty_on_hand);
 
         const suggElem = suggested > 0
-          ? `<span style="color:#30D158">+${num(suggested)} ${i.unit}</span>`
+          ? `<span style="color:#30D158">+${num(suggested)} ${safeUnit}</span>`
           : `<span style="color:#30D158;opacity:0.5;">OK</span>`;
 
         return `
           <tr>
             <td>
-              <div style="color:#FFFFFF;font-weight:500;">${i.name}</div>
-              <div style="color:#8E8E93;font-size:12px;">${i.unit || ''}</div>
+              <div style="color:#FFFFFF;font-weight:500;">${safeName}</div>
+              <div style="color:#8E8E93;font-size:12px;">${safeUnit}</div>
             </td>
             <td class="mono" style="color:${qtyColor}">${num(i.qty_on_hand)}</td>
             <td class="mono" style="color:#8E8E93">${num(par)}</td>
@@ -544,7 +549,7 @@
             </td>
             <td class="mono" style="color:#8E8E93">${num(sevenDayNeed)}</td>
             <td class="mono">${suggElem}</td>
-            <td><span class="badge ${badgeClass}">${status.replace('_', ' ')}</span></td>
+            <td><span class="badge ${badgeClass}">${safeStatusLabel}</span></td>
           </tr>
         `;
       }).join('');
@@ -575,13 +580,13 @@
       tbody.innerHTML = items.slice(0, 100).map(item => `
             <tr>
                 <td>
-                    <div style="color:#FFFFFF;font-weight:500;">${item.name}</div>
+                    <div style="color:#FFFFFF;font-weight:500;">${escapeHtml(sanitizeTextInput(item.name, { maxLength: 160 }))}</div>
                 </td>
-                <td><span class="badge" style="background:#2C2C2E;color:#AEAEB2;border:none;">${item.category}</span></td>
-                <td style="color:#8E8E93;">$${item.price}</td>
+                <td><span class="badge" style="background:#2C2C2E;color:#AEAEB2;border:none;">${escapeHtml(sanitizeTextInput(item.category, { maxLength: 80 }))}</span></td>
+                <td style="color:#8E8E93;">$${Number(item.price || 0).toFixed(2)}</td>
                 <td style="color:#FFFFFF;">${Math.round(item.avg_daily_sales || 0)}</td>
                 <td style="color:#30D158;font-weight:600;">${Math.round(item.forecast_tomorrow || 0)}</td>
-                <td style="color:#8E8E93;">$${Math.round((item.forecast_tomorrow || 0) * item.price)}</td>
+                <td style="color:#8E8E93;">$${Math.round((item.forecast_tomorrow || 0) * Number(item.price || 0))}</td>
             </tr>
         `).join('');
     }
@@ -776,15 +781,17 @@
       if (critical.length > 0) {
         html += critical.map(item => {
           const need = (item.reorder_point || 0) - item.qty_on_hand;
+          const safeName = escapeHtml(sanitizeTextInput(item.name, { maxLength: 160 }));
+          const safeUnit = escapeHtml(sanitizeTextInput(item.unit || '', { maxLength: 32 }));
           return `
               <li style="margin-bottom:16px; display:flex; gap:16px; align-items:start;">
                   <div style="color:#FF453A; font-size:20px; line-height:1.4;">•</div>
                   <div>
                       <div style="color:#FFF; font-size:16px; font-weight:500; line-height:1.4;">
-                          ${item.name} is critically low.
+                          ${safeName} is critically low.
                       </div>
                       <div style="color:#AEAEB2; font-size:15px; margin-top:2px;">
-                          Order <span style="color:#FFF; font-weight:600;">${Math.ceil(need)} ${item.unit}</span> to restore safe levels.
+                          Order <span style="color:#FFF; font-weight:600;">${Math.ceil(need)} ${safeUnit}</span> to restore safe levels.
                       </div>
                   </div>
               </li>`;
@@ -794,15 +801,17 @@
       if (warnings.length > 0) {
         html += warnings.map(item => {
           const need = (item.reorder_point || 0) - item.qty_on_hand;
+          const safeName = escapeHtml(sanitizeTextInput(item.name, { maxLength: 160 }));
+          const safeUnit = escapeHtml(sanitizeTextInput(item.unit || '', { maxLength: 32 }));
           return `
               <li style="margin-bottom:16px; display:flex; gap:16px; align-items:start;">
                   <div style="color:#FF9F0A; font-size:20px; line-height:1.4;">•</div>
                   <div>
                       <div style="color:#FFF; font-size:16px; font-weight:500; line-height:1.4;">
-                          Restock ${item.name}.
+                          Restock ${safeName}.
                       </div>
                       <div style="color:#AEAEB2; font-size:15px; margin-top:2px;">
-                          Purchase <span style="color:#FFF; font-weight:600;">${Math.ceil(need)} ${item.unit}</span> soon to avoid running out.
+                          Purchase <span style="color:#FFF; font-weight:600;">${Math.ceil(need)} ${safeUnit}</span> soon to avoid running out.
                       </div>
                   </div>
               </li>`;
@@ -915,12 +924,14 @@
 
       el.innerHTML = alerts.map(item => {
         const isCrit = item.status === 'critical';
+        const safeName = escapeHtml(sanitizeTextInput(item.name, { maxLength: 160 }));
+        const safeUnit = escapeHtml(sanitizeTextInput(item.unit || '', { maxLength: 32 }));
         return `
           <div class="alert-item ${isCrit ? 'alert-critical' : 'alert-warning'}">
             <span class="alert-icon">${isCrit ? '🔴' : '🟡'}</span>
             <div>
-              <strong>${item.name}</strong>
-              <p>${num(item.qty_on_hand)} ${item.unit} on hand · ~${item.days_of_supply ?? '?'} days supply</p>
+              <strong>${safeName}</strong>
+              <p>${num(item.qty_on_hand)} ${safeUnit} on hand · ~${item.days_of_supply ?? '?'} days supply</p>
             </div>
           </div>
         `;

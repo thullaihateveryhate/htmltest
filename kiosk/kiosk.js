@@ -2,20 +2,25 @@
 // Tony's Pizza — Kiosk Logic
 // ═══════════════════════════════════════════
 
-const SUPABASE_URL  = 'https://ifycpxtpyysuthnknptl.supabase.co';
-const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlmeWNweHRweXlzdXRobmtucHRsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA0NzAwMDksImV4cCI6MjA4NjA0NjAwOX0.RO2F6bLvbo34ZGRDpjbv8NrsHtmkX_D9mtXTVb0ErhY';
-
-const KIOSK_EMAIL   = 'demo@tonys.pizza';
-const KIOSK_PASS    = 'TonysPizza2026!';
-const TAX_RATE      = 0.08;
+const SUPABASE_URL = window.__SUPABASE_URL || '';
+const SUPABASE_ANON = window.__SUPABASE_ANON_KEY || '';
+const AUTH_FUNCTION_URL = `${SUPABASE_URL}/functions/v1/auth-login`;
+const KIOSK_DEVICE_TOKEN_KEY = 'stockd.kiosk.deviceToken.v1';
+const MAX_KIOSK_RETRY_MS = 5 * 60 * 1000;
+const TAX_RATE = 0.08;
 
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+const { escapeHtml, parseFiniteNumber, safeAttribute, safeEnum, sanitizeTextInput } = window.StockdSecurity;
+const ALLOWED_DINING_OPTIONS = ['Dine In', 'Take Out', 'Delivery'];
 
 // ─── State ───────────────────────────────
 let menuItems  = [];   // { id, name, category, sizeLabel }
 let categories = [];
-let cart        = [];   // { id, name, category, qty }
-let activeCat   = 'all';
+let cart = [];         // { id, name, category, qty }
+let activeCat = 'all';
+let menuLoaded = false;
+let kioskRetryCount = 0;
+let kioskRetryTimer = null;
 
 // ─── DOM refs ────────────────────────────
 const $catSel   = document.getElementById('cat-select');
@@ -37,18 +42,165 @@ const $clock    = document.getElementById('header-clock');
 // ─── Init ────────────────────────────────
 (async () => {
   startClock();
-  await signIn();
-  await loadMenu();
   bindEvents();
+  await bootstrapKiosk();
 })();
 
-async function signIn() {
-  const { error } = await sb.auth.signInWithPassword({
-    email: KIOSK_EMAIL, password: KIOSK_PASS
+function getKioskClientToken() {
+  try {
+    const existing = localStorage.getItem(KIOSK_DEVICE_TOKEN_KEY);
+    if (existing && existing.length >= 16 && existing.length <= 128) {
+      return existing;
+    }
+  } catch (_error) {
+  }
+
+  const randomPart = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+    ? crypto.randomUUID().replace(/-/g, '')
+    : `${Date.now()}${Math.random().toString(36).slice(2)}`;
+  const token = `stockd-kiosk-${randomPart}`.slice(0, 80);
+
+  try {
+    localStorage.setItem(KIOSK_DEVICE_TOKEN_KEY, token);
+  } catch (_error) {
+  }
+
+  return token;
+}
+
+async function invokeProtectedKioskLogin() {
+  const response = await fetch(AUTH_FUNCTION_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'apikey': SUPABASE_ANON,
+      'Authorization': `Bearer ${SUPABASE_ANON}`
+    },
+    body: JSON.stringify({
+      flow: 'kiosk_login',
+      client_token: getKioskClientToken()
+    })
   });
+
+  let parsed = null;
+  try {
+    parsed = await response.json();
+  } catch (_error) {
+    parsed = null;
+  }
+
+  if (!response.ok && (!parsed || typeof parsed !== 'object')) {
+    throw new Error('Protected kiosk login failed');
+  }
+
+  return parsed || {};
+}
+
+async function applyKioskSession(payload) {
+  const session = payload && typeof payload === 'object' ? payload.session : null;
+  const accessToken = session && typeof session.access_token === 'string' ? session.access_token : '';
+  const refreshToken = session && typeof session.refresh_token === 'string' ? session.refresh_token : '';
+
+  if (!accessToken || !refreshToken) {
+    throw new Error('Protected kiosk login returned an invalid session');
+  }
+
+  const { data, error } = await sb.auth.setSession({
+    access_token: accessToken,
+    refresh_token: refreshToken
+  });
+
   if (error) {
-    toast('Auth failed: ' + error.message, 'error');
-    console.error('Auth error:', error);
+    throw error;
+  }
+
+  return data.session;
+}
+
+function clearKioskRetry() {
+  if (kioskRetryTimer) {
+    clearTimeout(kioskRetryTimer);
+    kioskRetryTimer = null;
+  }
+}
+
+function getRetryDelay(retryAfterMs) {
+  if (typeof retryAfterMs === 'number' && retryAfterMs > 0) {
+    return retryAfterMs;
+  }
+
+  kioskRetryCount += 1;
+  return Math.min(MAX_KIOSK_RETRY_MS, Math.max(5000, 5000 * (2 ** (kioskRetryCount - 1))));
+}
+
+function scheduleKioskRetry(delayMs) {
+  clearKioskRetry();
+  const safeDelayMs = Math.max(1000, delayMs);
+  $menuStats.textContent = `Kiosk sign-in unavailable. Retrying in ${Math.ceil(safeDelayMs / 1000)}s...`;
+  kioskRetryTimer = setTimeout(() => {
+    kioskRetryTimer = null;
+    bootstrapKiosk().catch((error) => {
+      console.error('Kiosk bootstrap retry failed:', error);
+    });
+  }, safeDelayMs);
+}
+
+function handleKioskAuthFailure(result, error) {
+  const retryAfterMs = getRetryDelay(result && typeof result === 'object' ? result.retry_after_ms : 0);
+  const message = result && typeof result.message === 'string' && result.message
+    ? result.message
+    : 'Kiosk sign-in failed.';
+
+  toast(`${message} Retrying in ${Math.ceil(retryAfterMs / 1000)}s.`, 'error');
+  if (error) {
+    console.error('Kiosk auth error:', error);
+  }
+  scheduleKioskRetry(retryAfterMs);
+}
+
+async function signIn() {
+  try {
+    const result = await invokeProtectedKioskLogin();
+    if (!result.ok || result.code !== 'signed_in') {
+      handleKioskAuthFailure(result);
+      return null;
+    }
+
+    const session = await applyKioskSession(result);
+    kioskRetryCount = 0;
+    clearKioskRetry();
+    return session;
+  } catch (error) {
+    handleKioskAuthFailure(null, error);
+    return null;
+  }
+}
+
+async function ensureSignedIn() {
+  const { data: { session } } = await sb.auth.getSession();
+  if (session) {
+    kioskRetryCount = 0;
+    clearKioskRetry();
+    return session;
+  }
+
+  return await signIn();
+}
+
+async function bootstrapKiosk() {
+  if (!SUPABASE_URL || !SUPABASE_ANON) {
+    toast('Kiosk configuration is missing Supabase public keys.', 'error');
+    console.error('Missing kiosk Supabase config');
+    return;
+  }
+
+  const session = await ensureSignedIn();
+  if (!session) {
+    return;
+  }
+
+  if (!menuLoaded) {
+    await loadMenu();
   }
 }
 
@@ -69,20 +221,34 @@ async function loadMenu() {
   menuItems = data
     .filter(i => !i.name.startsWith('__'))
     .map(i => {
-      const sizeMatch = i.name.match(/\((S|M|L|XL)\)$/);
-      return { ...i, sizeLabel: sizeMatch ? sizeMatch[1] : null };
+      const safeName = sanitizeTextInput(i.name, { maxLength: 160 });
+      const safeCategory = sanitizeTextInput(i.category, { maxLength: 80 });
+      const sizeMatch = safeName.match(/\((S|M|L|XL)\)$/);
+      return { ...i, name: safeName, category: safeCategory, sizeLabel: sizeMatch ? sizeMatch[1] : null };
     });
 
   categories = [...new Set(menuItems.map(i => i.category))].filter(Boolean);
   renderCategoryDropdown();
   renderItemDropdown();
   $menuStats.textContent = `${menuItems.length} items across ${categories.length} categories`;
+  menuLoaded = true;
 }
 
 // ─── Render Category Dropdown ────────────
 function renderCategoryDropdown() {
-  $catSel.innerHTML = '<option value="all">All Categories</option>' +
-    categories.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
+  $catSel.innerHTML = '';
+
+  const defaultOption = document.createElement('option');
+  defaultOption.value = 'all';
+  defaultOption.textContent = 'All Categories';
+  $catSel.appendChild(defaultOption);
+
+  categories.forEach((category) => {
+    const option = document.createElement('option');
+    option.value = category;
+    option.textContent = category;
+    $catSel.appendChild(option);
+  });
 }
 
 // ─── Render Item Dropdown ────────────────
@@ -92,13 +258,23 @@ function renderItemDropdown() {
     return true;
   });
 
-  $itemSel.innerHTML = '<option value="">— pick a menu item —</option>' +
-    filtered.map(i => {
-      const label = i.sizeLabel
-        ? `${i.name} (${i.sizeLabel === 'S' ? 'Small' : i.sizeLabel === 'M' ? 'Medium' : i.sizeLabel === 'L' ? 'Large' : i.sizeLabel})`
-        : i.name;
-      return `<option value="${i.id}" data-name="${esc(i.name)}" data-cat="${esc(i.category || '')}">${esc(label)}</option>`;
-    }).join('');
+  $itemSel.innerHTML = '';
+
+  const placeholder = document.createElement('option');
+  placeholder.value = '';
+  placeholder.textContent = '— pick a menu item —';
+  $itemSel.appendChild(placeholder);
+
+  filtered.forEach((item) => {
+    const option = document.createElement('option');
+    option.value = item.id;
+    option.dataset.name = item.name;
+    option.dataset.cat = item.category || '';
+    option.textContent = item.sizeLabel
+      ? `${item.name} (${item.sizeLabel === 'S' ? 'Small' : item.sizeLabel === 'M' ? 'Medium' : item.sizeLabel === 'L' ? 'Large' : item.sizeLabel})`
+      : item.name;
+    $itemSel.appendChild(option);
+  });
 
   $itemSel.value = '';
   $btnAdd.disabled = true;
@@ -106,11 +282,13 @@ function renderItemDropdown() {
 
 // ─── Cart Logic ──────────────────────────
 function addToCart(id, name, category) {
+  const safeName = sanitizeTextInput(name, { maxLength: 160 });
+  const safeCategory = sanitizeTextInput(category, { maxLength: 80 });
   const existing = cart.find(c => c.id === id);
   if (existing) {
     existing.qty++;
   } else {
-    cart.push({ id, name, category, qty: 1 });
+    cart.push({ id, name: safeName, category: safeCategory, qty: 1 });
   }
   updateCart();
 }
@@ -152,15 +330,15 @@ function updateCart() {
       div.className = 'cart-item';
       div.innerHTML = `
         <div class="cart-item-info">
-          <div class="cart-item-name">${esc(item.name)}</div>
-          <div class="cart-item-cat">${esc(item.category)}</div>
+          <div class="cart-item-name">${escapeHtml(item.name)}</div>
+          <div class="cart-item-cat">${escapeHtml(item.category)}</div>
         </div>
         <div class="cart-item-qty">
-          <button class="qty-btn" data-id="${item.id}" data-d="-1">−</button>
+          <button class="qty-btn" data-id="${safeAttribute(item.id, { maxLength: 80 })}" data-d="-1">−</button>
           <span class="qty-val">${item.qty}</span>
-          <button class="qty-btn" data-id="${item.id}" data-d="1">+</button>
+          <button class="qty-btn" data-id="${safeAttribute(item.id, { maxLength: 80 })}" data-d="1">+</button>
         </div>
-        <button class="cart-item-remove" data-id="${item.id}" title="Remove">×</button>
+        <button class="cart-item-remove" data-id="${safeAttribute(item.id, { maxLength: 80 })}" title="Remove">×</button>
       `;
       div.querySelectorAll('.qty-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
@@ -205,8 +383,13 @@ async function placeOrder() {
   const total = subtotal + tax;
 
   const orderId = 'KIOSK-' + Date.now();
-  const diningOption = document.getElementById('dining-opt').value;
-  const numGuests = parseInt(document.getElementById('guests').value) || 1;
+  const diningOption = safeEnum(document.getElementById('dining-opt').value, ALLOWED_DINING_OPTIONS, 'Dine In');
+  const numGuests = parseFiniteNumber(document.getElementById('guests').value, {
+    integer: true,
+    min: 1,
+    max: 20
+  }) || 1;
+  document.getElementById('guests').value = String(numGuests);
 
   const order = {
     order_id:       orderId,
@@ -242,9 +425,10 @@ async function placeOrder() {
   // Show confirmation
   document.getElementById('modal-msg').textContent =
     `${diningOption} · ${numGuests} guest${numGuests > 1 ? 's' : ''}`;
+  const renderedCart = cart.map(c => `${c.qty}× ${escapeHtml(c.name)}`).join('<br>');
   document.getElementById('modal-detail').innerHTML =
-    `<strong>Order #${orderId.slice(-8)}</strong><br>` +
-    cart.map(c => `${c.qty}× ${c.name}`).join('<br>') +
+    `<strong>Order #${escapeHtml(orderId.slice(-8))}</strong><br>` +
+    renderedCart +
     `<br><br>Subtotal: ${fmt(subtotal)}<br>Tax: ${fmt(tax)}<br><strong>Total: ${fmt(total)}</strong>` +
     `<br><br><span style="color:var(--green)">✓ ${data.items_processed} items processed, ${data.ingredients_consumed} ingredients consumed</span>`;
   $overlay.classList.add('open');
@@ -255,7 +439,8 @@ async function placeOrder() {
 // ─── Events ──────────────────────────────
 function bindEvents() {
   $catSel.addEventListener('change', () => {
-    activeCat = $catSel.value;
+    const selectedCategory = sanitizeTextInput($catSel.value, { maxLength: 80 });
+    activeCat = selectedCategory === 'all' || categories.includes(selectedCategory) ? selectedCategory : 'all';
     renderItemDropdown();
   });
   $itemSel.addEventListener('change', () => {
@@ -272,12 +457,14 @@ function bindEvents() {
   $btnAdd.addEventListener('click', () => {
     const opt = $itemSel.selectedOptions[0];
     if (!opt || !opt.value) return;
-    const qty = Math.max(1, parseInt($addQty.value) || 1);
+    const qty = parseFiniteNumber($addQty.value, { integer: true, min: 1, max: 20 }) || 1;
+    const safeName = sanitizeTextInput(opt.dataset.name, { maxLength: 160 });
+    const safeCategory = sanitizeTextInput(opt.dataset.cat, { maxLength: 80 });
     const existing = cart.find(c => c.id === opt.value);
     if (existing) {
       existing.qty += qty;
     } else {
-      cart.push({ id: opt.value, name: opt.dataset.name, category: opt.dataset.cat, qty });
+      cart.push({ id: opt.value, name: safeName, category: safeCategory, qty });
     }
     updateCart();
     $itemSel.value = '';
@@ -295,9 +482,7 @@ function bindEvents() {
 
 // ─── Helpers ─────────────────────────────
 function esc(s) {
-  const d = document.createElement('div');
-  d.textContent = s;
-  return d.innerHTML;
+  return escapeHtml(s);
 }
 
 function fmt(n) {

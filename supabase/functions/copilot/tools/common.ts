@@ -2,6 +2,16 @@ import { AppError, JsonObject, JsonValue, ToolError, ToolExecutionResult, isPlai
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const CONTROL_CHARS_RE = /[\u0000-\u001F\u007F-\u009F]/g;
+const MULTISPACE_RE = /\s+/g;
+
+export function normalizeShortText(value: string): string {
+  return value
+    .normalize("NFKC")
+    .replace(CONTROL_CHARS_RE, " ")
+    .replace(MULTISPACE_RE, " ")
+    .trim();
+}
 
 export function expectObjectArgs(args: unknown): Record<string, unknown> {
   if (!isPlainObject(args)) {
@@ -30,7 +40,7 @@ export function requireStringArg(
     throw new AppError("invalid_tool_args", `${label} must be a string.`, 400);
   }
 
-  const trimmed = value.trim();
+  const trimmed = normalizeShortText(value);
   if (!trimmed) {
     throw new AppError("invalid_tool_args", `${label} is required.`, 400);
   }
@@ -129,7 +139,19 @@ export function requireNumberArg(
 }
 
 export function ilikeContains(term: string): string {
-  const normalized = term.replace(/\*/g, "").trim();
+  const normalized = normalizeShortText(term)
+    .replace(/[%_*]/g, " ")
+    .replace(MULTISPACE_RE, " ")
+    .trim();
+
+  if (!normalized) {
+    throw new AppError(
+      "invalid_tool_args",
+      "Search term must contain at least one non-wildcard character.",
+      400,
+    );
+  }
+
   return `ilike.*${normalized}*`;
 }
 

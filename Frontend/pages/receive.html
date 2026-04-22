@@ -214,12 +214,14 @@
 
         <div class="form-group">
           <label class="form-label">Quantity Received</label>
-          <input type="number" class="form-input mono" id="qty-input" placeholder="0" min="0.01" step="0.01">
+          <input type="number" class="form-input mono" id="qty-input" placeholder="0" min="0.01" max="1000000"
+            step="0.01">
         </div>
 
         <div class="form-group">
           <label class="form-label">Note (optional)</label>
-          <input type="text" class="form-input" id="note-input" placeholder="e.g. Weekly delivery from Sysco">
+          <input type="text" class="form-input" id="note-input" placeholder="e.g. Weekly delivery from Sysco"
+            maxlength="240">
         </div>
 
         <button class="btn btn-primary btn-block" id="submit-btn" onclick="submitReceive()">
@@ -275,8 +277,10 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="../js/security.js"></script>
   <script src="../js/env.js"></script>
   <script src="../js/supabase-client.js"></script>
+  <script src="../js/monitoring-client.js"></script>
   <script src="../js/ai-client.js"></script>
   <script src="../js/ai-copilot.js"></script>
   <script src="../js/animated-counter.js"></script>
@@ -285,27 +289,48 @@
   <script type="module">
     import { getInvoiceMatches } from '../js/invoice-matcher.js';
 
+    const { escapeHtml, parseFiniteNumber, safeAttribute, sanitizeTextInput } = window.StockdSecurity;
+    const monitoring = window.stockdMonitoring;
+
+    async function trackMonitoring(eventType, options) {
+      if (!monitoring || typeof monitoring.trackEvent !== 'function') {
+        return { ok: false, skipped: true };
+      }
+
+      return monitoring.trackEvent(eventType, options);
+    }
+
+    function setInvoiceStatus(message, type = 'info') {
+      const statusEl = document.getElementById('invoice-status');
+      const colors = {
+        error: 'var(--red)',
+        info: 'var(--blue)',
+        idle: 'var(--text-muted)'
+      };
+      statusEl.textContent = message;
+      statusEl.style.color = colors[type] || colors.idle;
+    }
+
     window.analyzeInvoice = async function () {
       const fileInput = document.getElementById('invoice-upload');
       const file = fileInput.files[0];
-      const statusEl = document.getElementById('invoice-status');
 
       if (!file) {
-        statusEl.innerHTML = '<span style="color:var(--red)">Please select a PDF file first</span>';
+        setInvoiceStatus('Please select a PDF file first', 'error');
         return;
       }
 
       try {
-        statusEl.innerHTML = '<span style="color:var(--blue)">Analyzing PDF... this may take a moment</span>';
+        setInvoiceStatus('Analyzing PDF... this may take a moment', 'info');
         document.getElementById('analyze-btn').disabled = true;
 
         const { matches, unmatched } = await getInvoiceMatches(file, sb);
 
         renderMatches(matches, unmatched);
-        statusEl.innerHTML = '';
+        setInvoiceStatus('', 'idle');
       } catch (err) {
         console.error(err);
-        statusEl.innerHTML = `<span style="color:var(--red)">Error: ${err.message}</span>`;
+        setInvoiceStatus(`Error: ${sanitizeTextInput(err && err.message ? err.message : 'Unable to analyze invoice.', { maxLength: 180 })}`, 'error');
       } finally {
         document.getElementById('analyze-btn').disabled = false;
       }
@@ -332,11 +357,11 @@
       tbody.innerHTML = matches.map((m, idx) => `
         <tr>
           <td><input type="checkbox" class="match-checkbox" data-idx="${idx}" checked></td>
-          <td style="font-weight:500;">${m.ingredientName}</td>
-          <td class="mono" style="color:var(--green)">+${m.qtyShipped}</td>
-          <td class="mono" style="font-size:12px;">${m.ingredientUnit}</td>
+          <td style="font-weight:500;">${escapeHtml(sanitizeTextInput(m.ingredientName, { maxLength: 160 }))}</td>
+          <td class="mono" style="color:var(--green)">+${escapeHtml(m.qtyShipped)}</td>
+          <td class="mono" style="font-size:12px;">${escapeHtml(sanitizeTextInput(m.ingredientUnit, { maxLength: 32 }))}</td>
           <td style="font-size:11px; color:var(--text-muted)">
-            Ordered: ${m.qtyOrdered}<br>Product #: ${m.productNumber}
+            Ordered: ${escapeHtml(m.qtyOrdered)}<br>Product #: ${escapeHtml(sanitizeTextInput(m.productNumber, { maxLength: 80 }))}
           </td>
         </tr>
       `).join('');
@@ -361,14 +386,19 @@
       let failCount = 0;
 
       for (const cb of checkboxes) {
-        const idx = parseInt(cb.getAttribute('data-idx'));
+        const idx = parseFiniteNumber(cb.getAttribute('data-idx'), {
+          integer: true,
+          min: 0,
+          max: currentMatches.length - 1
+        });
+        if (idx === null) continue;
         const item = currentMatches[idx];
 
         try {
           const { error } = await sb.rpc('receive_inventory', {
             p_ingredient_id: item.ingredientId,
             p_qty: item.qtyShipped,
-            p_note: `Invoice Upload: ${item.productNumber}`
+            p_note: sanitizeTextInput(`Invoice Upload: ${item.productNumber || ''}`, { maxLength: 240 }) || null
           });
 
           if (error) throw error;
@@ -380,6 +410,16 @@
       }
 
       alert(`Processed invoice.\nSuccess: ${successCount}\nFailed: ${failCount}`);
+      await trackMonitoring(failCount > 0 ? 'inventory_receive_rejected' : 'inventory_receive_action', {
+        flow: 'invoice_receive',
+        metadata: {
+          page: 'receive',
+          method: 'invoice',
+          selected_items: checkboxes.length,
+          success_count: successCount,
+          fail_count: failCount
+        }
+      });
 
       // Reset
       btn.textContent = 'Confirm & Receive Selected';
@@ -393,7 +433,26 @@
   </script>
 
   <script>
+    const { escapeHtml, parseFiniteNumber, safeAttribute, sanitizeTextInput } = window.StockdSecurity;
+    const monitoring = window.stockdMonitoring;
+
     function go(page) { window.location.href = page + '.html'; }
+
+    async function trackMonitoring(eventType, options) {
+      if (!monitoring || typeof monitoring.trackEvent !== 'function') {
+        return { ok: false, skipped: true };
+      }
+
+      return monitoring.trackEvent(eventType, options);
+    }
+
+    async function trackSuspiciousInput(fieldName, rawValue, options) {
+      if (!monitoring || typeof monitoring.trackSuspiciousInput !== 'function') {
+        return { ok: false, skipped: true };
+      }
+
+      return monitoring.trackSuspiciousInput(fieldName, rawValue, options);
+    }
 
     let ingredients = [];
 
@@ -407,11 +466,26 @@
     async function loadIngredients() {
       const { data, error } = await sb.from('ingredients').select('id, name, unit');
       if (error) { showToast('Failed to load ingredients', 'error'); return; }
-      ingredients = data || [];
+      ingredients = (data || []).map((ingredient) => ({
+        ...ingredient,
+        name: sanitizeTextInput(ingredient.name, { maxLength: 160 }),
+        unit: sanitizeTextInput(ingredient.unit, { maxLength: 32 })
+      }));
 
       const sel = document.getElementById('ingredient-select');
-      sel.innerHTML = '<option value="">— Select ingredient —</option>' +
-        ingredients.map(i => `<option value="${i.id}">${i.name} (${i.unit})</option>`).join('');
+      sel.innerHTML = '';
+
+      const placeholder = document.createElement('option');
+      placeholder.value = '';
+      placeholder.textContent = '— Select ingredient —';
+      sel.appendChild(placeholder);
+
+      ingredients.forEach((ingredient) => {
+        const option = document.createElement('option');
+        option.value = ingredient.id;
+        option.textContent = `${ingredient.name} (${ingredient.unit})`;
+        sel.appendChild(option);
+      });
 
       sel.addEventListener('change', async () => {
         const id = sel.value;
@@ -426,11 +500,42 @@
 
     async function submitReceive() {
       const id = document.getElementById('ingredient-select').value;
-      const qty = parseFloat(document.getElementById('qty-input').value);
-      const note = document.getElementById('note-input').value || null;
+      const qty = parseFiniteNumber(document.getElementById('qty-input').value, {
+        min: 0.01,
+        max: 1000000
+      });
+      const rawNote = document.getElementById('note-input').value;
+      const note = sanitizeTextInput(rawNote, { maxLength: 240 }) || null;
+      const ingredient = ingredients.find((entry) => entry.id === id);
 
-      if (!id) { setStatus('Select an ingredient', 'error'); return; }
-      if (!qty || qty <= 0) { setStatus('Enter a valid quantity', 'error'); return; }
+      await trackSuspiciousInput('receive_note', rawNote, {
+        flow: 'manual_receive',
+        page: 'receive'
+      });
+
+      if (!ingredient) {
+        await trackMonitoring('inventory_receive_rejected', {
+          flow: 'manual_receive',
+          metadata: {
+            page: 'receive',
+            reason: 'missing_ingredient'
+          }
+        });
+        setStatus('Select a valid ingredient', 'error');
+        return;
+      }
+
+      if (qty === null) {
+        await trackMonitoring('inventory_receive_rejected', {
+          flow: 'manual_receive',
+          metadata: {
+            page: 'receive',
+            reason: 'invalid_quantity'
+          }
+        });
+        setStatus('Enter a valid quantity', 'error');
+        return;
+      }
 
       document.getElementById('submit-btn').disabled = true;
       setStatus('Processing...', 'info');
@@ -440,115 +545,93 @@
       });
 
       if (error || data?.status === 'error') {
+        await trackMonitoring('inventory_receive_rejected', {
+          flow: 'manual_receive',
+          metadata: {
+            page: 'receive',
+            reason: 'rpc_error',
+            ingredient_id: id
+          }
+        });
         setStatus('❌ ' + (data?.message || error?.message), 'error');
         document.getElementById('submit-btn').disabled = false;
         return;
       }
 
-      const ing = ingredients.find(i => i.id === id);
-      setStatus(`✅ Received ${qty} ${ing?.unit || ''} of ${ing?.name}. New on-hand: ${data.new_qty_on_hand}`, 'success');
+      await trackMonitoring('inventory_receive_action', {
+        flow: 'manual_receive',
+        metadata: {
+          page: 'receive',
+          method: 'manual',
+          ingredient_id: id,
+          qty_received: qty,
+          had_note: Boolean(note)
+        }
+      });
+
+      setStatus(`✅ Received ${qty} ${ingredient.unit || ''} of ${ingredient.name}. New on-hand: ${data.new_qty_on_hand}`, 'success');
       showToast('Delivery recorded!', 'success');
 
       document.getElementById('qty-input').value = '';
       document.getElementById('note-input').value = '';
-      document.getElementById('current-stock').textContent = `Current on-hand: ${data.new_qty_on_hand} ${ing?.unit || ''}`;
+      document.getElementById('current-stock').textContent = `Current on-hand: ${data.new_qty_on_hand} ${ingredient.unit || ''}`;
       document.getElementById('submit-btn').disabled = false;
       loadRecentReceipts();
     }
 
-    // Define Demo Data Function FIRST
-    function getDemoReceiptsData() {
-      const today = new Date();
-      return [
-        {
-          id: 'demo-r-1',
-          created_at: new Date(today.getTime() - 2 * 60 * 60 * 1000).toISOString(),
-          qty_delta: 320,
-          note: 'Sysco Regular Delivery',
-          ingredients: { name: 'Mozzarella Cheese', unit: 'oz' }
-        },
-        {
-          id: 'demo-r-2',
-          created_at: new Date(today.getTime() - 4 * 60 * 60 * 1000).toISOString(),
-          qty_delta: 500,
-          note: 'Flour Resupply',
-          ingredients: { name: 'Pizza Dough (Flour)', unit: 'oz' }
-        },
-        {
-          id: 'demo-r-3',
-          created_at: new Date(today.getTime() - 24 * 60 * 60 * 1000).toISOString(),
-          qty_delta: 50,
-          note: 'Produce Vendor',
-          ingredients: { name: 'Red Onions', unit: 'oz' }
-        },
-        {
-          id: 'demo-r-4',
-          created_at: new Date(today.getTime() - 26 * 60 * 60 * 1000).toISOString(),
-          qty_delta: 100,
-          note: 'Produce Vendor',
-          ingredients: { name: 'Bell Peppers', unit: 'oz' }
-        },
-        {
-          id: 'demo-r-5',
-          created_at: new Date(today.getTime() - 48 * 60 * 60 * 1000).toISOString(),
-          qty_delta: 15,
-          note: 'Emergency Store Run',
-          ingredients: { name: 'Basil', unit: 'oz' }
-        }
-      ];
-    }
-
     async function loadRecentReceipts() {
-      console.log('Starting loadRecentReceipts...');
-      let data = [];
       const tbody = document.getElementById('receipts-tbody');
       if (!tbody) return;
 
       try {
-        if (typeof sb !== 'undefined') {
-          const result = await sb
-            .from('inventory_txns')
-            .select('id, created_at, qty_delta, note, ingredients(name, unit)')
-            .eq('txn_type', 'RECEIVE')
-            .order('created_at', { ascending: false })
-            .limit(10);
+        const { data, error } = await sb
+          .from('inventory_txns')
+          .select('id, created_at, qty_delta, note, ingredients(name, unit)')
+          .eq('txn_type', 'RECEIVE')
+          .order('created_at', { ascending: false })
+          .limit(10);
 
-          if (result.data) data = result.data;
+        if (error) {
+          throw error;
         }
-      } catch (err) {
-        console.warn('Supabase fetch failed, using demo data', err);
-      }
 
-      // Force demo data if empty
-      if (!data || data.length === 0) {
-        console.log('Loading demo data...');
-        data = getDemoReceiptsData();
-      }
+        if (!data || data.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--text-muted);">No receipts stored yet. Record a delivery to populate this table.</td></tr>';
+          return;
+        }
 
-      if (data.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:20px;">No receipts found.</td></tr>';
-        return;
-      }
+        tbody.innerHTML = data.map(t => {
+          const dateStr = t.created_at ? new Date(t.created_at).toLocaleDateString() : '—';
+          const name = sanitizeTextInput(t.ingredients?.name || '—', { maxLength: 160 });
+          const unit = sanitizeTextInput(t.ingredients?.unit || '', { maxLength: 32 });
+          const note = t.note ? sanitizeTextInput(t.note, { maxLength: 240 }) : '—';
+          const receiptId = safeAttribute(t.id, { maxLength: 80 });
 
-      console.log('Rendering', data.length, 'rows');
-      tbody.innerHTML = data.map(t => {
-        const dateStr = t.created_at ? new Date(t.created_at).toLocaleDateString() : '—';
-        const name = t.ingredients?.name || '—';
-        const unit = t.ingredients?.unit || '';
-        const note = t.note || '—';
-
-        return `
+          return `
         <tr>
-          <td class="date-cell">${dateStr}</td>
-          <td class="ingredient-cell">${name}</td>
-          <td class="qty-cell">+${t.qty_delta} ${unit}</td>
-          <td class="note-cell">${note}</td>
+          <td class="date-cell">${escapeHtml(dateStr)}</td>
+          <td class="ingredient-cell">${escapeHtml(name)}</td>
+          <td class="qty-cell">+${escapeHtml(t.qty_delta)} ${escapeHtml(unit)}</td>
+          <td class="note-cell">${escapeHtml(note)}</td>
           <td class="action-cell">
-            <button class="action-btn" onclick="showReceiptOptions('${t.id}')">⋮</button>
+            <button class="action-btn receipt-action-btn" data-receipt-id="${receiptId}">⋮</button>
           </td>
         </tr>`;
-      }).join('');
+        }).join('');
+      } catch (err) {
+        console.error('Failed to load receipts', err);
+        showToast('Failed to load recent receipts', 'error');
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--red);">Unable to load stored receipts.</td></tr>';
+      }
     }
+
+    document.getElementById('receipts-tbody').addEventListener('click', (event) => {
+      const actionButton = event.target.closest('.receipt-action-btn');
+      if (!actionButton) return;
+      const receiptId = sanitizeTextInput(actionButton.getAttribute('data-receipt-id'), { maxLength: 80 });
+      if (!receiptId) return;
+      showReceiptOptions(receiptId);
+    });
 
     function showReceiptOptions(receiptId) {
       // Placeholder for future action menu (Edit, Delete, View Details)

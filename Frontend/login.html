@@ -175,6 +175,37 @@
       border-radius: 8px;
     }
 
+    .challenge-box {
+      margin-top: 16px;
+      margin-bottom: 4px;
+      padding: 16px;
+      border: 1px solid #f4d58d;
+      border-radius: 14px;
+      background: #fff8e7;
+      text-align: left;
+      display: none;
+    }
+
+    .challenge-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-main);
+      margin-bottom: 6px;
+    }
+
+    .challenge-prompt {
+      font-size: 14px;
+      color: var(--text-main);
+      margin-bottom: 10px;
+    }
+
+    .challenge-help {
+      margin-top: 8px;
+      font-size: 12px;
+      color: var(--text-sub);
+      line-height: 1.45;
+    }
+
     .footer-text {
       margin-top: 24px;
       color: #86868b;
@@ -234,13 +265,23 @@
       <div class="subtitle">Manage your inventory intelligently</div>
 
       <div class="input-group">
-        <input type="email" class="input-field" id="email" placeholder="Email" autofocus>
+        <input type="email" class="input-field" id="email" placeholder="Email" maxlength="320" autocomplete="email"
+          autofocus>
       </div>
       <div class="input-group">
-        <input type="password" class="input-field" id="password" placeholder="Password">
+        <input type="password" class="input-field" id="password" placeholder="Password" maxlength="128"
+          autocomplete="current-password">
       </div>
 
-      <div class="error-msg" id="error-msg"></div>
+      <div class="challenge-box" id="challenge-box" hidden>
+        <div class="challenge-title">Verification required</div>
+        <div class="challenge-prompt" id="challenge-prompt"></div>
+        <input type="text" class="input-field" id="challenge-answer" placeholder="Enter the answer" maxlength="32"
+          inputmode="numeric" autocomplete="off">
+        <div class="challenge-help">This appears only after repeated failed sign-in attempts.</div>
+      </div>
+
+      <div class="error-msg" id="error-msg" role="alert" aria-live="polite"></div>
 
       <button class="btn-primary" id="login-btn" onclick="doLogin()">
         Continue
@@ -263,11 +304,24 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/security.js"></script>
   <script src="js/env.js"></script>
   <script src="js/supabase-client.js"></script>
   <script>
+    const { escapeHtml, sanitizeEmailInput, sanitizeTextInput } = window.StockdSecurity;
+    const AUTH_DEVICE_TOKEN_KEY = 'stockd.auth.deviceToken.v1';
+    const LOGIN_LOCK_KEY = 'stockd.auth.loginLockUntil.v1';
+    const authUiState = {
+      loading: false,
+      challengeToken: null,
+      challengeEmail: null,
+      lockUntilMs: 0,
+      lockTimer: null
+    };
+
     // If already logged in, go to app
     (async () => {
+      restoreStoredLockout();
       const { data: { session } } = await sb.auth.getSession();
       if (session) window.location.href = 'index.html';
     })();
@@ -276,27 +330,305 @@
     document.getElementById('password').addEventListener('keydown', e => {
       if (e.key === 'Enter') doLogin();
     });
+    document.getElementById('challenge-answer').addEventListener('keydown', e => {
+      if (e.key === 'Enter') doLogin();
+    });
+    document.getElementById('email').addEventListener('input', handleEmailInputChange);
 
-    async function doLogin() {
-      const email = document.getElementById('email').value.trim();
-      const pass = document.getElementById('password').value;
-      if (!email || !pass) { showError('Enter email and password'); return; }
+    function getValidatedCredentials() {
+      const emailInput = document.getElementById('email');
+      const passwordInput = document.getElementById('password');
+      const email = sanitizeEmailInput(emailInput.value);
+      const pass = passwordInput.value;
 
-      setLoading(true);
-      const { error } = await sb.auth.signInWithPassword({ email, password: pass });
+      if (!email || !pass) {
+        showError('Enter a valid email and password');
+        return null;
+      }
+
+      if (pass.length > 128) {
+        showError('Password must be 128 characters or fewer');
+        return null;
+      }
+
+      emailInput.value = email;
+      return { email, pass };
+    }
+
+    function getClientToken() {
+      try {
+        const existing = localStorage.getItem(AUTH_DEVICE_TOKEN_KEY);
+        if (existing && existing.length >= 16 && existing.length <= 128) {
+          return existing;
+        }
+      } catch (_error) {
+      }
+
+      const randomPart = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID().replace(/-/g, '')
+        : `${Date.now()}${Math.random().toString(36).slice(2)}`;
+      const token = `stockd-${randomPart}`.slice(0, 80);
+
+      try {
+        localStorage.setItem(AUTH_DEVICE_TOKEN_KEY, token);
+      } catch (_error) {
+      }
+
+      return token;
+    }
+
+    function getAuthFunctionUrl() {
+      return `${window.__SUPABASE_URL}/functions/v1/auth-login`;
+    }
+
+    async function invokeProtectedLogin(payload) {
+      const response = await fetch(getAuthFunctionUrl(), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': window.__SUPABASE_ANON_KEY || '',
+          'Authorization': `Bearer ${window.__SUPABASE_ANON_KEY || ''}`
+        },
+        body: JSON.stringify(payload)
+      });
+
+      let parsed = null;
+      try {
+        parsed = await response.json();
+      } catch (_error) {
+        parsed = null;
+      }
+
+      if (!response.ok && (!parsed || typeof parsed !== 'object')) {
+        throw new Error('Protected sign-in failed');
+      }
+
+      return parsed || {};
+    }
+
+    function isLockedOut() {
+      return authUiState.lockUntilMs > Date.now();
+    }
+
+    function getRemainingLockMs() {
+      return Math.max(0, authUiState.lockUntilMs - Date.now());
+    }
+
+    function clearLockTimer() {
+      if (authUiState.lockTimer) {
+        clearInterval(authUiState.lockTimer);
+        authUiState.lockTimer = null;
+      }
+    }
+
+    function clearStoredLockout() {
+      try {
+        localStorage.removeItem(LOGIN_LOCK_KEY);
+      } catch (_error) {
+      }
+    }
+
+    function persistLockout(untilMs) {
+      authUiState.lockUntilMs = untilMs;
+      try {
+        localStorage.setItem(LOGIN_LOCK_KEY, String(untilMs));
+      } catch (_error) {
+      }
+      startLockTimer();
+    }
+
+    function restoreStoredLockout() {
+      try {
+        const stored = Number(localStorage.getItem(LOGIN_LOCK_KEY) || '0');
+        if (Number.isFinite(stored) && stored > Date.now()) {
+          authUiState.lockUntilMs = stored;
+          startLockTimer();
+          showError(`Too many sign-in attempts. Please wait ${formatRetry(getRemainingLockMs())}.`);
+          return;
+        }
+      } catch (_error) {
+      }
+
+      authUiState.lockUntilMs = 0;
+      clearStoredLockout();
+      renderLoginButton();
+    }
+
+    function startLockTimer() {
+      clearLockTimer();
+      renderLoginButton();
+
+      if (!isLockedOut()) {
+        authUiState.lockUntilMs = 0;
+        clearStoredLockout();
+        return;
+      }
+
+      authUiState.lockTimer = setInterval(() => {
+        if (!isLockedOut()) {
+          authUiState.lockUntilMs = 0;
+          clearStoredLockout();
+          clearLockTimer();
+        }
+        renderLoginButton();
+      }, 1000);
+    }
+
+    function formatRetry(retryAfterMs) {
+      const seconds = Math.max(1, Math.ceil(retryAfterMs / 1000));
+      return `${seconds}s`;
+    }
+
+    function renderLoginButton() {
+      const btn = document.getElementById('login-btn');
+      if (!btn) return;
+
+      const retryAfterMs = getRemainingLockMs();
+      btn.disabled = authUiState.loading || retryAfterMs > 0;
+      if (authUiState.loading) {
+        btn.textContent = 'Signing in...';
+      } else if (retryAfterMs > 0) {
+        btn.textContent = `Retry in ${formatRetry(retryAfterMs)}`;
+      } else {
+        btn.textContent = 'Continue';
+      }
+    }
+
+    function clearChallenge() {
+      authUiState.challengeToken = null;
+      authUiState.challengeEmail = null;
+      const box = document.getElementById('challenge-box');
+      const prompt = document.getElementById('challenge-prompt');
+      const answer = document.getElementById('challenge-answer');
+      box.hidden = true;
+      box.style.display = 'none';
+      prompt.textContent = '';
+      answer.value = '';
+    }
+
+    function setChallenge(challenge, email) {
+      if (!challenge || typeof challenge.token !== 'string' || typeof challenge.prompt !== 'string') {
+        return;
+      }
+
+      authUiState.challengeToken = challenge.token;
+      authUiState.challengeEmail = email;
+
+      const box = document.getElementById('challenge-box');
+      const prompt = document.getElementById('challenge-prompt');
+      prompt.textContent = challenge.prompt;
+      box.hidden = false;
+      box.style.display = 'block';
+      document.getElementById('challenge-answer').focus();
+    }
+
+    function handleEmailInputChange() {
+      const email = sanitizeEmailInput(document.getElementById('email').value);
+      if (!authUiState.challengeEmail) return;
+      if (!email || email !== authUiState.challengeEmail) {
+        clearChallenge();
+      }
+    }
+
+    function getChallengeAnswer() {
+      const answer = sanitizeTextInput(document.getElementById('challenge-answer').value, {
+        maxLength: 32
+      });
+      return answer || null;
+    }
+
+    async function setSessionFromPayload(payload) {
+      const session = payload && typeof payload === 'object' ? payload.session : null;
+      const accessToken = session && typeof session.access_token === 'string' ? session.access_token : '';
+      const refreshToken = session && typeof session.refresh_token === 'string' ? session.refresh_token : '';
+
+      if (!accessToken || !refreshToken) {
+        throw new Error('Missing session tokens');
+      }
+
+      const { error } = await sb.auth.setSession({
+        access_token: accessToken,
+        refresh_token: refreshToken
+      });
 
       if (error) {
-        showError(error.message);
-        setLoading(false);
+        throw error;
+      }
+    }
+
+    function applyProtectedFailure(response, email) {
+      const code = typeof response.code === 'string' ? response.code : 'auth_failed';
+      const message = typeof response.message === 'string' && response.message
+        ? response.message
+        : 'Unable to sign in. Check your credentials and try again.';
+      const retryAfterMs = typeof response.retry_after_ms === 'number' ? response.retry_after_ms : 0;
+
+      if (response.challenge) {
+        setChallenge(response.challenge, email);
+      } else if (code === 'invalid_credentials') {
+        clearChallenge();
+      }
+
+      if (retryAfterMs > 0) {
+        persistLockout(Date.now() + retryAfterMs);
+        showError(`${message} Retry in ${formatRetry(retryAfterMs)}.`);
       } else {
-        window.location.href = 'index.html';
+        showError(message);
+      }
+    }
+
+    async function doLogin() {
+      if (isLockedOut()) {
+        showError(`Too many sign-in attempts. Please wait ${formatRetry(getRemainingLockMs())}.`);
+        renderLoginButton();
+        return;
+      }
+
+      const credentials = getValidatedCredentials();
+      if (!credentials) return;
+      const { email, pass } = credentials;
+      const payload = {
+        flow: 'web_login',
+        email,
+        password: pass,
+        client_token: getClientToken()
+      };
+
+      if (authUiState.challengeToken && authUiState.challengeEmail === email) {
+        const challengeAnswer = getChallengeAnswer();
+        if (!challengeAnswer) {
+          showError('Enter the verification answer to continue.');
+          document.getElementById('challenge-answer').focus();
+          return;
+        }
+        payload.challenge_token = authUiState.challengeToken;
+        payload.challenge_answer = challengeAnswer;
+      }
+
+      setLoading(true);
+      try {
+        const response = await invokeProtectedLogin(payload);
+        if (response && response.ok && response.code === 'signed_in') {
+          clearChallenge();
+          authUiState.lockUntilMs = 0;
+          clearStoredLockout();
+          await setSessionFromPayload(response);
+          window.location.href = 'index.html';
+          return;
+        }
+
+        applyProtectedFailure(response || {}, email);
+      } catch (_error) {
+        showError('Protected sign-in is unavailable right now.');
+      } finally {
+        setLoading(false);
       }
     }
 
     async function doSignUp() {
-      const email = document.getElementById('email').value.trim();
-      const pass = document.getElementById('password').value;
-      if (!email || !pass) { showError('Enter email and password'); return; }
+      const credentials = getValidatedCredentials();
+      if (!credentials) return;
+      const { email, pass } = credentials;
       if (pass.length < 6) { showError('Password must be at least 6 characters'); return; }
 
       setLoading(true);
@@ -312,7 +644,7 @@
             <div style="font-size:48px;margin-bottom:16px;">✉️</div>
             <h3 style="color:var(--text-main);font-size:20px;font-weight:600;margin-bottom:8px;">Check your email</h3>
             <p style="color:var(--text-sub);font-size:14px;line-height:1.6;">
-              We sent a confirmation link to <strong style="color:var(--text-main)">${email}</strong>.<br>
+              We sent a confirmation link to <strong style="color:var(--text-main)">${escapeHtml(email)}</strong>.<br>
               Click it to activate your account, then sign in.
             </p>
           </div>
@@ -327,16 +659,15 @@
     }
 
     function setLoading(loading) {
-      const btn = document.getElementById('login-btn');
-      if (btn) {
-        btn.disabled = loading;
-        btn.textContent = loading ? 'Signing in...' : 'Continue';
-      }
+      authUiState.loading = loading;
+      renderLoginButton();
     }
 
     function autoFillDemo() {
       document.getElementById('email').value = 'demo@user.pizza';
       document.getElementById('password').value = 'admin';
+      clearChallenge();
+      showError('');
     }
   </script>
 </body>

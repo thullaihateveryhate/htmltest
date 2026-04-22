@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Stockd — Security Monitoring</title>
+  <link rel="icon" type="image/svg+xml" href="../assets/logo-s.svg">
+  <link rel="stylesheet" href="../css/app-light.css">
+  <style>
+    .monitor-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px;
+      margin-top: 24px;
+    }
+
+    .monitor-card .stat-value {
+      font-size: 28px;
+      font-weight: 700;
+      margin-top: 6px;
+    }
+
+    .monitor-meta {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-top: 10px;
+      color: var(--text-muted);
+      font-size: 12px;
+    }
+
+    .finding-list {
+      display: grid;
+      gap: 12px;
+      margin-top: 16px;
+    }
+
+    .finding-item {
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 14px;
+      padding: 14px 16px;
+      background: rgba(255, 255, 255, 0.03);
+    }
+
+    .finding-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .finding-pill.high {
+      background: rgba(255, 69, 58, 0.18);
+      color: #FF8A80;
+    }
+
+    .finding-pill.medium {
+      background: rgba(255, 159, 10, 0.18);
+      color: #FFD180;
+    }
+
+    .finding-pill.low {
+      background: rgba(48, 209, 88, 0.18);
+      color: #9CFFB0;
+    }
+
+    .mini-bars {
+      display: grid;
+      gap: 10px;
+      margin-top: 16px;
+    }
+
+    .mini-bar-row {
+      display: grid;
+      grid-template-columns: 150px 1fr 50px;
+      gap: 10px;
+      align-items: center;
+      font-size: 13px;
+    }
+
+    .mini-bar-track {
+      height: 10px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.08);
+      overflow: hidden;
+    }
+
+    .mini-bar-fill {
+      height: 100%;
+      border-radius: 999px;
+      background: linear-gradient(90deg, #0A84FF, #64D2FF);
+    }
+
+    .muted-note {
+      color: var(--text-muted);
+      font-size: 12px;
+      line-height: 1.5;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+
+<body>
+  <nav class="topnav">
+    <div class="topnav-brand">
+      <div class="topnav-icon"></div>
+      <div>
+        <div class="topnav-title">Stockd</div>
+      </div>
+    </div>
+    <div class="topnav-links">
+      <button class="topnav-link" onclick="go('dashboard')">Dashboard</button>
+      <button class="topnav-link active" onclick="go('security-monitoring')">Security Monitor</button>
+    </div>
+    <div class="topnav-actions">
+      <button class="btn btn-outline" onclick="signOut()" title="Sign out">⏻</button>
+    </div>
+  </nav>
+
+  <div class="page-container">
+    <div class="card" style="margin-top:24px;">
+      <div class="section-header" style="margin-top:0;">
+        <h1 style="margin:0;">Traffic Monitoring & Security Analysis</h1>
+      </div>
+      <p style="color:var(--text-muted); font-size:13px; line-height:1.6; margin:0;">
+        This view renders the generated monitoring summary artifact. It combines structured Stockd event logs with
+        deterministic suspicious-activity detection and an optional AI-assisted narrative when enabled.
+      </p>
+      <div class="monitor-meta" id="monitor-meta">
+        <span>Loading summary…</span>
+      </div>
+    </div>
+
+    <div class="monitor-grid" id="monitor-grid"></div>
+
+    <div class="grid-2 mt-24">
+      <div class="card">
+        <div class="section-header" style="margin-top:0;">
+          <h2 style="margin:0;">Suspicious Findings</h2>
+        </div>
+        <div class="finding-list" id="finding-list"></div>
+      </div>
+
+      <div class="card">
+        <div class="section-header" style="margin-top:0;">
+          <h2 style="margin:0;">Top Event Categories</h2>
+        </div>
+        <div class="mini-bars" id="category-bars"></div>
+      </div>
+    </div>
+
+    <div class="card mt-24">
+      <div class="section-header" style="margin-top:0;">
+        <h2 style="margin:0;">Recent Security-Relevant Events</h2>
+      </div>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Time</th>
+            <th>Event</th>
+            <th>Severity</th>
+            <th>Source</th>
+            <th>Flow</th>
+          </tr>
+        </thead>
+        <tbody id="recent-events-body"></tbody>
+      </table>
+      <div class="muted-note">
+        The underlying source-of-truth events are also exported to `logs/security-events.jsonl`, with the summary in
+        `logs/traffic_summary.json` and the readable report in `logs/security_analysis_sample.md`.
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="../js/security.js"></script>
+  <script src="../js/env.js"></script>
+  <script src="../js/supabase-client.js"></script>
+  <script>
+    const { escapeHtml } = window.StockdSecurity;
+
+    function go(page) {
+      window.location.href = page + '.html';
+    }
+
+    function formatNumber(value) {
+      return Number(value || 0).toLocaleString();
+    }
+
+    function renderCards(summary) {
+      const cards = [
+        { label: 'Events (24h)', value: summary.windows.last_24_hours.total_events, accent: 'var(--accent)' },
+        { label: 'Login Failures', value: summary.security_counters.login_failures, accent: 'var(--orange)' },
+        { label: 'Lockouts', value: summary.security_counters.lockout_events, accent: 'var(--red)' },
+        { label: 'Suspicious Inputs', value: summary.security_counters.suspicious_input_events, accent: 'var(--purple)' },
+        { label: 'CSV Validation Failures', value: summary.security_counters.csv_validation_failures, accent: 'var(--yellow)' },
+        { label: 'Copilot Rejections', value: summary.security_counters.copilot_rejections, accent: 'var(--green)' }
+      ];
+
+      document.getElementById('monitor-grid').innerHTML = cards.map((card) => `
+        <div class="card monitor-card">
+          <div class="stat-label">${escapeHtml(card.label)}</div>
+          <div class="stat-value" style="color:${card.accent}">${formatNumber(card.value)}</div>
+        </div>
+      `).join('');
+    }
+
+    function renderFindings(summary) {
+      const findings = summary.suspicious_findings || [];
+      const container = document.getElementById('finding-list');
+      if (!findings.length) {
+        container.innerHTML = '<div class="finding-item"><strong>No threshold-based findings.</strong><div class="muted-note">The current artifact does not contain any alert clusters that exceeded the configured thresholds.</div></div>';
+        return;
+      }
+
+      container.innerHTML = findings.slice(0, 8).map((finding) => `
+        <div class="finding-item">
+          <span class="finding-pill ${escapeHtml(finding.severity)}">${escapeHtml(finding.severity)}</span>
+          <div style="font-weight:700; margin-top:10px;">${escapeHtml(finding.title)}</div>
+          <div class="muted-note">${escapeHtml(finding.summary)}</div>
+          <div class="monitor-meta">
+            <span>Count: ${formatNumber(finding.count)}</span>
+            <span>First seen: ${escapeHtml(finding.first_seen || '—')}</span>
+            <span>Last seen: ${escapeHtml(finding.last_seen || '—')}</span>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function renderTopCategories(summary) {
+      const rows = (summary.top_event_types || []).slice(0, 8);
+      const maxCount = rows.length ? Math.max(...rows.map((row) => row.count)) : 1;
+      document.getElementById('category-bars').innerHTML = rows.map((row) => `
+        <div class="mini-bar-row">
+          <div>${escapeHtml(row.key)}</div>
+          <div class="mini-bar-track">
+            <div class="mini-bar-fill" style="width:${Math.max(6, Math.round((row.count / maxCount) * 100))}%"></div>
+          </div>
+          <div style="text-align:right;">${formatNumber(row.count)}</div>
+        </div>
+      `).join('');
+    }
+
+    function renderRecentEvents(summary) {
+      const rows = summary.recent_events || [];
+      const tbody = document.getElementById('recent-events-body');
+      tbody.innerHTML = rows.slice(0, 12).map((event) => `
+        <tr>
+          <td class="mono">${escapeHtml(event.event_at || '—')}</td>
+          <td>${escapeHtml(event.event_type)}</td>
+          <td>${escapeHtml(event.severity)}</td>
+          <td>${escapeHtml(event.source)}</td>
+          <td>${escapeHtml(event.flow || '—')}</td>
+        </tr>
+      `).join('');
+    }
+
+    function renderMeta(summary) {
+      document.getElementById('monitor-meta').innerHTML = `
+        <span>Source: ${escapeHtml(summary.source || 'unknown')}</span>
+        <span>Generated: ${escapeHtml(summary.generated_at || '—')}</span>
+        <span>AI assisted: ${summary.ai_assisted ? 'Yes' : 'No'}</span>
+      `;
+    }
+
+    (async () => {
+      const session = await requireAuth('../login.html');
+      if (!session) return;
+
+      const response = await fetch('../data/security-summary.json', { cache: 'no-store' });
+      if (!response.ok) {
+        document.getElementById('monitor-meta').innerHTML = '<span>Monitoring summary not found. Run the monitoring analysis script first.</span>';
+        return;
+      }
+
+      const summary = await response.json();
+      renderMeta(summary);
+      renderCards(summary);
+      renderFindings(summary);
+      renderTopCategories(summary);
+      renderRecentEvents(summary);
+    })().catch((error) => {
+      document.getElementById('monitor-meta').innerHTML = `<span>${escapeHtml(error && error.message ? error.message : 'Unable to load monitoring summary.')}</span>`;
+    });
+  </script>
+</body>
+
+</html>

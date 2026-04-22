@@ -6,10 +6,18 @@
   "scripts": {
     "test": "jest --runInBand --verbose",
     "test:copilot": "jest tests/copilot --runInBand --verbose",
+    "test:security": "node scripts/run-security-tests.js",
+    "test:bruteforce": "node scripts/run-bruteforce-tests.js",
+    "test:monitoring": "node scripts/run-monitoring-tests.js",
+    "test:database": "node scripts/run-database-tests.js",
     "test:watch": "jest --runInBand --watch",
     "build": "npm run config:public",
     "config": "npm run config:public",
     "config:public": "node scripts/generate-config.js",
+    "monitoring:analyze": "node scripts/export-monitoring-analysis.js",
+    "monitoring:sample": "node scripts/export-monitoring-analysis.js --fixture",
+    "monitoring:analyze:ai": "node scripts/export-monitoring-analysis.js --ai",
+    "seed:demo": "node scripts/setup-all.js",
     "start": "npx serve Frontend",
     "start:backend": "node Backend/server.js",
     "start:kiosk": "npx serve kiosk -l 3000"

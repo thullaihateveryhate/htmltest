@@ -4,11 +4,15 @@ SUPABASE_ANON_KEY=
 
 # Server-side secrets (Node scripts / Supabase Edge Function)
 SUPABASE_SERVICE_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
 OPENAI_API_KEY=
 OPENAI_MODEL=gpt-4o-mini
 
 # Dedicated signing secret for Copilot pending write confirmations
 COPILOT_ACTION_SECRET=
+AUTH_BRUTE_FORCE_SECRET=
+KIOSK_DEMO_EMAIL=
+KIOSK_DEMO_PASSWORD=
 
 # Optional server-side integrations
 ELEVENLABS_API_KEY=

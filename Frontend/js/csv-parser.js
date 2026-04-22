@@ -3,6 +3,70 @@
 // Load AFTER PapaParse CDN script
 // ═══════════════════════════════════════════════
 
+const stockdCsvSecurity = (typeof window !== 'undefined' && window.StockdSecurity)
+  ? window.StockdSecurity
+  : {
+    sanitizeTextInput(value, options = {}) {
+      const maxLength = typeof options.maxLength === 'number' ? options.maxLength : null;
+      let text = String(value == null ? '' : value)
+        .replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1>/gi, ' ')
+        .replace(/<\/?[^>]+>/g, ' ')
+        .replace(/[<>]/g, ' ')
+        .replace(/[\u0000-\u001F\u007F-\u009F]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+      if (maxLength !== null && text.length > maxLength) {
+        text = text.slice(0, maxLength).trim();
+      }
+      return text;
+    },
+    parseFiniteNumber(value, options = {}) {
+      if (value === null || value === undefined || value === '') return null;
+      const parsed = typeof value === 'number' ? value : Number(String(value).trim());
+      if (!Number.isFinite(parsed)) return null;
+      if (typeof options.min === 'number' && parsed < options.min) return null;
+      if (typeof options.max === 'number' && parsed > options.max) return null;
+      return parsed;
+    },
+    inspectTextInput(value) {
+      const raw = String(value == null ? '' : value);
+      const containsMarkup = /<\/?[^>]+>/i.test(raw) || /[<>]/.test(raw);
+      const containsScriptTag = /<(script|style)\b[^>]*>[\s\S]*?<\/\1>/i.test(raw);
+      const containsEventHandler = /\son[a-z]+\s*=/i.test(raw);
+      const containsJavascriptProtocol = /javascript\s*:/i.test(raw);
+      const containsControlChars = /[\u0000-\u001F\u007F-\u009F]/.test(raw);
+      return {
+        rawLength: raw.length,
+        sanitizedLength: this.sanitizeTextInput(raw, { maxLength: 10000 }).length,
+        containsMarkup,
+        containsScriptTag,
+        containsEventHandler,
+        containsJavascriptProtocol,
+        containsControlChars,
+        suspicious: containsMarkup || containsScriptTag || containsEventHandler || containsJavascriptProtocol || containsControlChars
+      };
+    }
+  };
+
+function normalizeBusinessDate(rawValue) {
+  const rawDate = String(rawValue || '').trim().split(' ')[0];
+  if (!rawDate) return null;
+
+  const [mm, dd, yyyy] = rawDate.split('/');
+  if (!mm || !dd || !yyyy) return null;
+
+  const month = mm.padStart(2, '0');
+  const day = dd.padStart(2, '0');
+  const businessDate = `${yyyy}-${month}-${day}`;
+  const parsedDate = new Date(`${businessDate}T00:00:00Z`);
+
+  if (Number.isNaN(parsedDate.getTime()) || parsedDate.toISOString().slice(0, 10) !== businessDate) {
+    return null;
+  }
+
+  return businessDate;
+}
+
 /**
  * Parse a Toast ItemSelectionDetails CSV and return
  * rows aggregated by (business_date, menu_item) ready
@@ -18,6 +82,12 @@ function parseToastCSV(file) {
       skipEmptyLines: true,
       complete(results) {
         const raw = results.data;
+        const parseErrors = Array.isArray(results.errors) ? results.errors : [];
+        let rejectedRows = 0;
+        let invalidDateRows = 0;
+        let invalidNumericRows = 0;
+        let suspiciousRows = 0;
+        let sanitizedFieldCount = 0;
 
         // Filter voids
         const valid = raw.filter(r => {
@@ -28,28 +98,49 @@ function parseToastCSV(file) {
         // Group by (date, menu_item)
         const grouped = {};
         valid.forEach(r => {
-          const rawDate = (r['Order Date'] || '').trim().split(' ')[0];
-          if (!rawDate) return;
-          const [mm, dd, yyyy] = rawDate.split('/');
-          if (!mm || !dd || !yyyy) return;
-          const bizDate = `${yyyy}-${mm.padStart(2,'0')}-${dd.padStart(2,'0')}`;
+          const itemReport = stockdCsvSecurity.inspectTextInput(r['Menu Item']);
+          const categoryReport = stockdCsvSecurity.inspectTextInput(r['Sales Category']);
+          if (itemReport.suspicious || categoryReport.suspicious) {
+            suspiciousRows += 1;
+          }
+          if (itemReport.suspicious) sanitizedFieldCount += 1;
+          if (categoryReport.suspicious) sanitizedFieldCount += 1;
 
-          const item = (r['Menu Item'] || '').trim();
-          if (!item) return;
+          const bizDate = normalizeBusinessDate(r['Order Date']);
+          if (!bizDate) {
+            invalidDateRows += 1;
+            rejectedRows += 1;
+            return;
+          }
+
+          const item = stockdCsvSecurity.sanitizeTextInput(r['Menu Item'], { maxLength: 160 });
+          if (!item) {
+            rejectedRows += 1;
+            return;
+          }
+
+          const category = stockdCsvSecurity.sanitizeTextInput(r['Sales Category'], { maxLength: 80 });
+          const qty = stockdCsvSecurity.parseFiniteNumber(r['Qty'], { min: 0, max: 1000000 });
+          const netSales = stockdCsvSecurity.parseFiniteNumber(r['Net Price'], { min: -1000000, max: 1000000 });
+          if (qty === null || netSales === null) {
+            invalidNumericRows += 1;
+            rejectedRows += 1;
+            return;
+          }
 
           const key = `${bizDate}|${item}`;
           if (!grouped[key]) {
             grouped[key] = {
               business_date: bizDate,
               menu_item_name: item,
-              category: (r['Sales Category'] || '').trim(),
+              category,
               qty: 0,
               net_sales: 0,
               source: 'toast'
             };
           }
-          grouped[key].qty += parseFloat(r['Qty'] || '0') || 0;
-          grouped[key].net_sales += parseFloat(r['Net Price'] || '0') || 0;
+          grouped[key].qty += qty;
+          grouped[key].net_sales += netSales;
         });
 
         const rows = Object.values(grouped).map(r => ({
@@ -67,6 +158,12 @@ function parseToastCSV(file) {
             rawRows: raw.length,
             voidsFiltered: raw.length - valid.length,
             aggregatedRows: rows.length,
+            parseErrors: parseErrors.length,
+            rejectedRows,
+            invalidDateRows,
+            invalidNumericRows,
+            suspiciousRows,
+            sanitizedFieldCount,
             uniqueItems: items.length,
             uniqueCategories: [...new Set(rows.map(r => r.category))].length,
             startDate: dates[0] || null,
@@ -111,4 +208,13 @@ async function ingestBatched(rows, onProgress) {
   }
 
   return { totalProcessed, totalItemsCreated };
+}
+
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = {
+    chunk,
+    ingestBatched,
+    normalizeBusinessDate,
+    parseToastCSV
+  };
 }

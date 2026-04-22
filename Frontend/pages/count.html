@@ -419,7 +419,8 @@
 
         <div class="form-group">
           <label class="form-label">Actual Counted Quantity</label>
-          <input type="number" class="form-input mono" id="qty-input" placeholder="0" min="0" step="0.01">
+          <input type="number" class="form-input mono" id="qty-input" placeholder="0" min="0" max="1000000"
+            step="0.01">
         </div>
 
         <!-- Live Delta Display -->
@@ -566,13 +567,28 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="../js/security.js"></script>
+  <script src="../js/database-helpers.js"></script>
   <script src="../js/env.js"></script>
   <script src="../js/supabase-client.js"></script>
+  <script src="../js/monitoring-client.js"></script>
   <script src="../js/ai-client.js"></script>
   <script src="../js/ai-copilot.js"></script>
   <script src="../js/animated-counter.js"></script>
   <script>
+    const { escapeHtml, parseFiniteNumber, safeEnum, sanitizeTextInput } = window.StockdSecurity;
+    const { getCountVariancePercent, parseInventoryCountNote, summarizeCountMetrics } = window.StockdDatabase;
+    const monitoring = window.stockdMonitoring;
+
     function go(page) { window.location.href = page + '.html'; }
+
+    async function trackMonitoring(eventType, options) {
+      if (!monitoring || typeof monitoring.trackEvent !== 'function') {
+        return { ok: false, skipped: true };
+      }
+
+      return monitoring.trackEvent(eventType, options);
+    }
 
     let ingredients = [];
     let allCountData = [];
@@ -590,11 +606,26 @@
 
     async function loadIngredients() {
       const { data } = await sb.from('ingredients').select('id, name, unit');
-      ingredients = data || [];
+      ingredients = (data || []).map((ingredient) => ({
+        ...ingredient,
+        name: sanitizeTextInput(ingredient.name, { maxLength: 160 }),
+        unit: sanitizeTextInput(ingredient.unit, { maxLength: 32 })
+      }));
 
       const sel = document.getElementById('ingredient-select');
-      sel.innerHTML = '<option value="">— Select ingredient —</option>' +
-        ingredients.map(i => `<option value="${i.id}">${i.name} (${i.unit})</option>`).join('');
+      sel.innerHTML = '';
+
+      const placeholder = document.createElement('option');
+      placeholder.value = '';
+      placeholder.textContent = '— Select ingredient —';
+      sel.appendChild(placeholder);
+
+      ingredients.forEach((ingredient) => {
+        const option = document.createElement('option');
+        option.value = ingredient.id;
+        option.textContent = `${ingredient.name} (${ingredient.unit})`;
+        sel.appendChild(option);
+      });
 
       sel.addEventListener('change', async () => {
         const id = sel.value;
@@ -634,9 +665,9 @@
       const deltaValue = document.getElementById('delta-value');
       const deltaDescription = document.getElementById('delta-description');
 
-      const countedQty = parseFloat(qtyInput.value);
+      const countedQty = parseFiniteNumber(qtyInput.value, { min: 0, max: 1000000 });
 
-      if (isNaN(countedQty) || !document.getElementById('ingredient-select').value) {
+      if (countedQty === null || !document.getElementById('ingredient-select').value) {
         deltaContainer.style.display = 'none';
         return;
       }
@@ -666,10 +697,32 @@
 
     async function submitCount() {
       const id = document.getElementById('ingredient-select').value;
-      const qty = parseFloat(document.getElementById('qty-input').value);
+      const qty = parseFiniteNumber(document.getElementById('qty-input').value, { min: 0, max: 1000000 });
+      const ingredient = ingredients.find((entry) => entry.id === id);
 
-      if (!id) { setStatus('Select an ingredient', 'error'); return; }
-      if (qty == null || qty < 0 || isNaN(qty)) { setStatus('Enter a valid quantity (≥ 0)', 'error'); return; }
+      if (!ingredient) {
+        await trackMonitoring('inventory_count_rejected', {
+          flow: 'physical_count',
+          metadata: {
+            page: 'count',
+            reason: 'missing_ingredient'
+          }
+        });
+        setStatus('Select a valid ingredient', 'error');
+        return;
+      }
+
+      if (qty === null) {
+        await trackMonitoring('inventory_count_rejected', {
+          flow: 'physical_count',
+          metadata: {
+            page: 'count',
+            reason: 'invalid_quantity'
+          }
+        });
+        setStatus('Enter a valid quantity (≥ 0)', 'error');
+        return;
+      }
 
       document.getElementById('submit-btn').disabled = true;
       setStatus('Processing...', 'info');
@@ -679,17 +732,34 @@
       });
 
       if (error || data?.status === 'error') {
+        await trackMonitoring('inventory_count_rejected', {
+          flow: 'physical_count',
+          metadata: {
+            page: 'count',
+            reason: 'rpc_error',
+            ingredient_id: id
+          }
+        });
         setStatus('❌ ' + (data?.message || error?.message), 'error');
         document.getElementById('submit-btn').disabled = false;
         return;
       }
 
-      const ing = ingredients.find(i => i.id === id);
       const delta = data.delta;
       const sign = delta >= 0 ? '+' : '';
 
+      await trackMonitoring('inventory_count_submission', {
+        flow: 'physical_count',
+        metadata: {
+          page: 'count',
+          ingredient_id: id,
+          actual_qty: qty,
+          delta
+        }
+      });
+
       setStatus(
-        `✅ Count recorded for ${ing?.name}. Previous: ${data.previous_qty.toLocaleString()} → Actual: ${data.actual_qty.toLocaleString()} (${sign}${delta} ${ing?.unit || ''})`,
+        `✅ Count recorded for ${ingredient.name}. Previous: ${data.previous_qty.toLocaleString()} → Actual: ${data.actual_qty.toLocaleString()} (${sign}${delta} ${ingredient.unit || ''})`,
         'success'
       );
       showToast('Count recorded!', 'success');
@@ -704,161 +774,29 @@
       await loadSummaryMetrics();
     }
 
-    // Demo data for hackathon presentation
-    function getDemoCountData() {
-      const today = new Date();
-      return [
-        {
-          id: 'demo-1',
-          created_at: new Date(today.getTime() - 2 * 60 * 60 * 1000).toISOString(), // 2 hours ago
-          qty_delta: 0,
-          note: 'Physical count: 45230→45230',
-          ingredients: { name: 'Mozzarella Cheese', unit: 'oz' },
-          systemQty: 45230,
-          countedQty: 45230,
-          isDemo: true
-        },
-        {
-          id: 'demo-2',
-          created_at: new Date(today.getTime() - 5 * 60 * 60 * 1000).toISOString(), // 5 hours ago
-          qty_delta: -8.5,
-          note: 'Physical count: 36010→36001.5',
-          ingredients: { name: 'Alfredo Sauce', unit: 'oz' },
-          systemQty: 36010,
-          countedQty: 36001.5,
-          isDemo: true
-        },
-        {
-          id: 'demo-3',
-          created_at: new Date(today.getTime() - 8 * 60 * 60 * 1000).toISOString(), // 8 hours ago
-          qty_delta: 0,
-          note: 'Physical count: 10170→10170',
-          ingredients: { name: 'Artichoke Hearts', unit: 'oz' },
-          systemQty: 10170,
-          countedQty: 10170,
-          isDemo: true
-        },
-        {
-          id: 'demo-4',
-          created_at: new Date(today.getTime() - 24 * 60 * 60 * 1000).toISOString(), // Yesterday
-          qty_delta: 4,
-          note: 'Physical count: 22700→22704',
-          ingredients: { name: 'Tomatoes', unit: 'oz' },
-          systemQty: 22700,
-          countedQty: 22704,
-          isDemo: true
-        },
-        {
-          id: 'demo-5',
-          created_at: new Date(today.getTime() - 26 * 60 * 60 * 1000).toISOString(),
-          qty_delta: 0,
-          note: 'Physical count: 13900→13900',
-          ingredients: { name: 'Spinach', unit: 'oz' },
-          systemQty: 13900,
-          countedQty: 13900,
-          isDemo: true
-        },
-        {
-          id: 'demo-6',
-          created_at: new Date(today.getTime() - 48 * 60 * 60 * 1000).toISOString(), // 2 days ago
-          qty_delta: 0,
-          note: 'Physical count: 6500→6500',
-          ingredients: { name: 'Ricotta Cheese', unit: 'oz' },
-          systemQty: 6500,
-          countedQty: 6500,
-          isDemo: true
-        },
-        {
-          id: 'demo-7',
-          created_at: new Date(today.getTime() - 50 * 60 * 60 * 1000).toISOString(),
-          qty_delta: 12,
-          note: 'Physical count: 638000→638012',
-          ingredients: { name: 'Pizza Dough', unit: 'oz' },
-          systemQty: 638000,
-          countedQty: 638012,
-          isDemo: true
-        },
-        {
-          id: 'demo-8',
-          created_at: new Date(today.getTime() - 72 * 60 * 60 * 1000).toISOString(), // 3 days ago
-          qty_delta: 0,
-          note: 'Physical count: 30250→30250',
-          ingredients: { name: 'Red Onions', unit: 'oz' },
-          systemQty: 30250,
-          countedQty: 30250,
-          isDemo: true
-        },
-        {
-          id: 'demo-9',
-          created_at: new Date(today.getTime() - 96 * 60 * 60 * 1000).toISOString(), // 4 days ago
-          qty_delta: 0,
-          note: 'Physical count: 18500→18500',
-          ingredients: { name: 'Pepperoni', unit: 'oz' },
-          systemQty: 18500,
-          countedQty: 18500,
-          isDemo: true
-        },
-        {
-          id: 'demo-10',
-          created_at: new Date(today.getTime() - 120 * 60 * 60 * 1000).toISOString(), // 5 days ago
-          qty_delta: 2.5,
-          note: 'Physical count: 8200→8202.5',
-          ingredients: { name: 'Italian Sausage', unit: 'oz' },
-          systemQty: 8200,
-          countedQty: 8202.5,
-          isDemo: true
-        },
-        {
-          id: 'demo-11',
-          created_at: new Date(today.getTime() - 130 * 60 * 60 * 1000).toISOString(),
-          qty_delta: 0,
-          note: 'Physical count: 14500→14500',
-          ingredients: { name: 'Black Olives', unit: 'oz' },
-          systemQty: 14500,
-          countedQty: 14500,
-          isDemo: true
-        },
-        {
-          id: 'demo-12',
-          created_at: new Date(today.getTime() - 140 * 60 * 60 * 1000).toISOString(),
-          qty_delta: 0,
-          note: 'Physical count: 9800→9800',
-          ingredients: { name: 'Mushrooms', unit: 'oz' },
-          systemQty: 9800,
-          countedQty: 9800,
-          isDemo: true
-        }
-      ];
-    }
-
     async function loadRecentCounts() {
-      console.log('Starting loadRecentCounts...');
-      let realData = [];
       const tbody = document.getElementById('counts-tbody');
       if (!tbody) return;
 
       try {
-        if (typeof sb !== 'undefined') {
-          // Get real counts from Supabase
-          const { data } = await sb
-            .from('inventory_txns')
-            .select('id, created_at, qty_delta, note, ingredients(name, unit)')
-            .eq('txn_type', 'COUNT')
-            .order('created_at', { ascending: false })
-            .limit(15);
+        const { data, error } = await sb
+          .from('inventory_txns')
+          .select('id, created_at, qty_delta, note, ingredients(name, unit)')
+          .eq('txn_type', 'COUNT')
+          .order('created_at', { ascending: false })
+          .limit(15);
 
-          if (data) realData = data;
+        if (error) {
+          throw error;
         }
+
+        allCountData = data || [];
       } catch (err) {
-        console.warn('Failed to load counts, using demo data', err);
+        console.error('Failed to load counts', err);
+        showToast('Failed to load recent counts', 'error');
+        allCountData = [];
       }
 
-      // Always load demo data
-      const demoData = getDemoCountData();
-
-      // Combine: real data first, then demo data
-      allCountData = [...realData, ...demoData];
-      console.log('Total counts:', allCountData.length);
       renderCountsTable();
     }
 
@@ -887,62 +825,63 @@
       }
 
       tbody.innerHTML = filteredData.map(t => {
-        const delta = t.qty_delta;
+        const delta = Number(t.qty_delta || 0);
         const sign = delta >= 0 ? '+' : '';
-
-        // Parse note to get system and counted qty
-        // Note format: "Physical count: X→Y"
-        let systemQty = '—';
-        let countedQty = '—';
-        const noteMatch = t.note?.match(/Physical count: ([\d.]+)→([\d.]+)/);
-        if (noteMatch) {
-          systemQty = parseFloat(noteMatch[1]).toLocaleString();
-          countedQty = parseFloat(noteMatch[2]).toLocaleString();
-        }
-
-        // Calculate variance percentage
-        const variance = noteMatch ? Math.abs((delta / parseFloat(noteMatch[1])) * 100) : 0;
+        const parsedNote = parseInventoryCountNote(t.note);
+        const systemQty = parsedNote && parsedNote.previousQty !== null
+          ? parsedNote.previousQty.toLocaleString()
+          : '—';
+        const countedQty = parsedNote && parsedNote.actualQty !== null
+          ? parsedNote.actualQty.toLocaleString()
+          : '—';
+        const variance = parsedNote ? getCountVariancePercent(parsedNote.previousQty, delta) : null;
         let varianceClass = 'good';
-        if (variance > 5) varianceClass = 'critical';
-        else if (variance > 2) varianceClass = 'warning';
+        if (variance !== null && variance > 5) varianceClass = 'critical';
+        else if (variance !== null && variance > 2) varianceClass = 'warning';
 
         // Delta styling
         let deltaClass = 'match';
         let deltaIcon = '✓';
         if (delta < 0) {
           deltaClass = 'negative';
-          deltaIcon = variance > 5 ? '⚠️' : '✓';
+          deltaIcon = variance !== null && variance > 5 ? '⚠️' : '✓';
         } else if (delta > 0) {
           deltaClass = 'positive';
-          deltaIcon = variance > 5 ? '⚠️' : '✓';
+          deltaIcon = variance !== null && variance > 5 ? '⚠️' : '✓';
         }
+
+        const ingredientName = sanitizeTextInput(t.ingredients?.name || '—', { maxLength: 160 });
+        const ingredientUnit = sanitizeTextInput(t.ingredients?.unit || '', { maxLength: 32 });
+        const noteSuffix = parsedNote
+          ? sanitizeTextInput(parsedNote.suffix || '', { maxLength: 200 })
+          : sanitizeTextInput(t.note || '', { maxLength: 200 });
 
         return `
           <tr>
             <td style="font-family:var(--font-mono); font-size:13px; color:var(--text-secondary);">
-              ${new Date(t.created_at).toLocaleDateString()}
+              ${escapeHtml(new Date(t.created_at).toLocaleDateString())}
             </td>
             <td style="font-weight:500; color:var(--text-primary);">
-              ${t.ingredients?.name || '—'}
+              ${escapeHtml(ingredientName)}
             </td>
             <td style="font-family:var(--font-mono); color:var(--text-secondary);">
-              ${systemQty} ${t.ingredients?.unit || ''}
+              ${escapeHtml(systemQty)} ${escapeHtml(ingredientUnit)}
             </td>
             <td style="font-family:var(--font-mono); color:var(--text-primary);">
-              ${countedQty} ${t.ingredients?.unit || ''}
+              ${escapeHtml(countedQty)} ${escapeHtml(ingredientUnit)}
             </td>
             <td>
               <div class="delta-cell ${deltaClass}">
-                ${sign}${delta.toLocaleString()} ${t.ingredients?.unit || ''} ${deltaIcon}
+                ${escapeHtml(sign + delta.toLocaleString())} ${escapeHtml(ingredientUnit)} ${deltaIcon}
               </div>
             </td>
             <td>
               <span class="variance-badge ${varianceClass}">
-                ${variance === 0 ? '0%' : (delta >= 0 ? '+' : '-') + variance.toFixed(2) + '%'}
+                ${escapeHtml(variance === null ? '—' : variance === 0 ? '0%' : (delta >= 0 ? '+' : '-') + variance.toFixed(2) + '%')}
               </span>
             </td>
             <td style="color:var(--text-muted); font-size:12px;">
-              ${t.note?.replace(/Physical count: [\d.]+→[\d.]+/, '').trim() || '—'}
+              ${escapeHtml(noteSuffix || '—')}
             </td>
           </tr>
         `;
@@ -950,7 +889,7 @@
     }
 
     function filterCounts(filter) {
-      currentFilter = filter;
+      currentFilter = safeEnum(filter, ['all', 'shortage', 'overage', 'perfect'], 'all');
       // Update button states
       document.querySelectorAll('.filter-btn').forEach(btn => {
         btn.classList.remove('active');
@@ -967,86 +906,76 @@
       const weekAgo = new Date();
       weekAgo.setDate(weekAgo.getDate() - 7);
 
-      const { data: recentCounts } = await sb
-        .from('inventory_txns')
-        .select('created_at, qty_delta, note, ingredients(name)')
-        .eq('txn_type', 'COUNT')
-        .gte('created_at', weekAgo.toISOString())
-        .order('created_at', { ascending: false });
+      let counts = [];
 
-      // Combine real data with demo data (filtering demo data to only include last 7 days)
-      const realCounts = recentCounts || [];
-      const demoData = getDemoCountData().filter(d => new Date(d.created_at) >= weekAgo);
-      const counts = [...realCounts, ...demoData];
+      try {
+        const { data: recentCounts, error } = await sb
+          .from('inventory_txns')
+          .select('created_at, qty_delta, note, ingredients(name)')
+          .eq('txn_type', 'COUNT')
+          .gte('created_at', weekAgo.toISOString())
+          .order('created_at', { ascending: false });
 
-      // Calculate metrics
-      const totalCounts = counts.length;
-
-      // Calculate accuracy (items within 5% variance)
-      let accurateCount = 0;
-      let totalVariance = 0;
-      let needsAttention = 0;
-
-      counts.forEach(c => {
-        const noteMatch = c.note?.match(/Physical count: ([\d.]+)→([\d.]+)/);
-        if (noteMatch) {
-          const systemQty = parseFloat(noteMatch[1]);
-          const variance = Math.abs((c.qty_delta / systemQty) * 100);
-          totalVariance += variance;
-
-          if (variance <= 5) accurateCount++;
-          if (variance > 10) needsAttention++;
+        if (error) {
+          throw error;
         }
-      });
 
-      const accuracyRate = totalCounts > 0 ? ((accurateCount / totalCounts) * 100).toFixed(1) : 0;
-      const avgDiscrepancy = totalCounts > 0 ? (totalVariance / totalCounts).toFixed(1) : 0;
+        counts = recentCounts || [];
+      } catch (err) {
+        console.error('Failed to load weekly count metrics', err);
+        showToast('Failed to load count summary metrics', 'error');
+      }
+
+      const metrics = summarizeCountMetrics(counts);
 
       // Animate metric values
-      AnimatedCounter.animate(document.getElementById('counts-this-week'), totalCounts);
-      // Hardcode accuracy for demo presentation with animation
-      AnimatedCounter.animatePercentage(document.getElementById('accuracy-rate'), 97.3, { decimals: 1 });
+      AnimatedCounter.animate(document.getElementById('counts-this-week'), metrics.totalCounts);
+      AnimatedCounter.animatePercentage(document.getElementById('accuracy-rate'), metrics.accuracyRate, { decimals: 1 });
       // Animate avg discrepancy
       const avgEl = document.getElementById('avg-discrepancy');
       avgEl.textContent = '±0%';
       setTimeout(() => {
-        avgEl.textContent = `±${avgDiscrepancy}%`;
+        avgEl.textContent = `±${metrics.avgDiscrepancy}%`;
       }, 100);
-      AnimatedCounter.animate(document.getElementById('needs-attention'), needsAttention);
+      AnimatedCounter.animate(document.getElementById('needs-attention'), metrics.needsAttention);
 
       // Quick stats
-      if (counts.length > 0) {
-        const lastCount = counts[0];
+      function setQuickStat(elementId, label, value) {
+        document.getElementById(elementId).innerHTML = `<strong>${label}</strong> ${escapeHtml(value)}`;
+      }
+
+      if (metrics.totalCounts > 0 && metrics.lastCount) {
+        const lastCount = metrics.lastCount;
         const timeAgo = getTimeAgo(new Date(lastCount.created_at));
-        document.getElementById('last-count-stat').innerHTML =
-          `<strong>Last Count:</strong> ${timeAgo} (${lastCount.ingredients?.name || 'Unknown'})`;
+        setQuickStat(
+          'last-count-stat',
+          'Last Count:',
+          `${timeAgo} (${sanitizeTextInput(lastCount.ingredients?.name || 'Unknown', { maxLength: 160 })})`
+        );
 
-        // Find most accurate items (0 delta)
-        const perfectCounts = counts.filter(c => c.qty_delta === 0);
-        const perfectItems = [...new Set(perfectCounts.map(c => c.ingredients?.name).filter(Boolean))];
-        document.getElementById('most-accurate-stat').innerHTML =
-          perfectItems.length > 0
-            ? `<strong>Most Accurate:</strong> ${perfectItems.slice(0, 3).join(', ')}`
-            : `<strong>Most Accurate:</strong> No perfect counts this week`;
+        setQuickStat(
+          'most-accurate-stat',
+          'Most Accurate:',
+          metrics.perfectItems.length > 0
+            ? metrics.perfectItems.slice(0, 3).join(', ')
+            : 'No perfect counts this week'
+        );
 
-        // Find items needing review (largest discrepancy)
-        const sortedByDelta = [...counts].sort((a, b) => Math.abs(b.qty_delta) - Math.abs(a.qty_delta));
-        if (sortedByDelta.length > 0 && sortedByDelta[0].qty_delta !== 0) {
-          const worst = sortedByDelta[0];
+        if (metrics.worstDiscrepancy && Number(metrics.worstDiscrepancy.qty_delta) !== 0) {
+          const worst = metrics.worstDiscrepancy;
           const sign = worst.qty_delta >= 0 ? '+' : '';
-          document.getElementById('needs-review-stat').innerHTML =
-            `<strong>Needs Review:</strong> ${worst.ingredients?.name} (${sign}${worst.qty_delta} discrepancy)`;
+          setQuickStat(
+            'needs-review-stat',
+            'Needs Review:',
+            `${sanitizeTextInput(worst.ingredients?.name || 'Unknown', { maxLength: 160 })} (${sign}${worst.qty_delta} discrepancy)`
+          );
         } else {
-          document.getElementById('needs-review-stat').innerHTML =
-            `<strong>Needs Review:</strong> All counts within acceptable range`;
+          setQuickStat('needs-review-stat', 'Needs Review:', 'All counts within acceptable range');
         }
       } else {
-        document.getElementById('last-count-stat').innerHTML =
-          `<strong>Last Count:</strong> No counts recorded this week`;
-        document.getElementById('most-accurate-stat').innerHTML =
-          `<strong>Most Accurate:</strong> Perform counts to see accuracy data`;
-        document.getElementById('needs-review-stat').innerHTML =
-          `<strong>Needs Review:</strong> No data available`;
+        setQuickStat('last-count-stat', 'Last Count:', 'No counts recorded this week');
+        setQuickStat('most-accurate-stat', 'Most Accurate:', 'Perform counts to see accuracy data');
+        setQuickStat('needs-review-stat', 'Needs Review:', 'No data available');
       }
 
       // Generate insights
@@ -1085,7 +1014,7 @@
         if (shortages.length >= 2 && shortages.length === deltas.length) {
           insights.push({
             icon: '📉',
-            text: `<strong>${name}</strong> has shown consistent shortages (${shortages.length} counts). Possible causes: spillage, portion control issues, or incorrect recipes.`
+            text: `<strong>${escapeHtml(name)}</strong> has shown consistent shortages (${shortages.length} counts). Possible causes: spillage, portion control issues, or incorrect recipes.`
           });
         }
       });
@@ -1096,22 +1025,14 @@
         if (overages.length >= 2) {
           insights.push({
             icon: '📈',
-            text: `<strong>${name}</strong> has shown overages. Consider adjusting par levels or reviewing receiving procedures.`
+            text: `<strong>${escapeHtml(name)}</strong> has shown overages. Consider adjusting par levels or reviewing receiving procedures.`
           });
         }
       });
 
       // Overall accuracy insight
-      const accurateCount = counts.filter(c => {
-        const noteMatch = c.note?.match(/Physical count: ([\d.]+)→([\d.]+)/);
-        if (noteMatch) {
-          const systemQty = parseFloat(noteMatch[1]);
-          return Math.abs((c.qty_delta / systemQty) * 100) <= 5;
-        }
-        return false;
-      }).length;
-
-      const accuracyRate = ((accurateCount / counts.length) * 100).toFixed(0);
+      const metrics = summarizeCountMetrics(counts);
+      const accuracyRate = metrics.accuracyRate.toFixed(0);
       if (accuracyRate >= 90) {
         insights.push({
           icon: '🏆',

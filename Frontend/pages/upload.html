@@ -85,13 +85,28 @@
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="../js/security.js"></script>
+  <script src="../js/database-helpers.js"></script>
   <script src="../js/env.js"></script>
   <script src="../js/supabase-client.js"></script>
+  <script src="../js/monitoring-client.js"></script>
   <script src="../js/csv-parser.js"></script>
   <script>
+    const { escapeHtml } = window.StockdSecurity;
+    const { buildRecentSalesDays } = window.StockdDatabase;
+    const monitoring = window.stockdMonitoring;
+
     function go(page) { window.location.href = page + '.html'; }
 
     let parsedData = null;
+
+    async function trackMonitoring(eventType, options) {
+      if (!monitoring || typeof monitoring.trackEvent !== 'function') {
+        return { ok: false, skipped: true };
+      }
+
+      return monitoring.trackEvent(eventType, options);
+    }
 
     (async () => {
       const session = await requireAuth('../login.html');
@@ -112,15 +127,53 @@
 
     async function handleFile(file) {
       setStatus('Parsing...', 'info');
+      await trackMonitoring('csv_upload_attempted', {
+        flow: 'daily_sales_upload',
+        metadata: {
+          page: 'upload',
+          file_name: file && file.name ? file.name : 'unknown.csv',
+          file_size_bytes: file && typeof file.size === 'number' ? file.size : null,
+          mime_type: file && file.type ? file.type : null
+        }
+      });
       try {
         parsedData = await parseToastCSV(file);
         const s = parsedData.stats;
+
+        if (s.rejectedRows > 0 || s.parseErrors > 0 || s.suspiciousRows > 0 || s.sanitizedFieldCount > 0) {
+          await trackMonitoring('csv_validation_failure', {
+            flow: 'daily_sales_upload',
+            metadata: {
+              page: 'upload',
+              raw_rows: s.rawRows,
+              aggregated_rows: s.aggregatedRows,
+              rejected_rows: s.rejectedRows,
+              invalid_date_rows: s.invalidDateRows,
+              invalid_numeric_rows: s.invalidNumericRows,
+              parse_errors: s.parseErrors,
+              suspicious_rows: s.suspiciousRows,
+              sanitized_field_count: s.sanitizedFieldCount
+            }
+          });
+        }
+
+        if (s.suspiciousRows > 0 || s.sanitizedFieldCount > 0) {
+          await trackMonitoring('suspicious_input_detected', {
+            flow: 'daily_sales_upload',
+            metadata: {
+              page: 'upload',
+              field_name: 'csv_rows',
+              suspicious_rows: s.suspiciousRows,
+              sanitized_field_count: s.sanitizedFieldCount
+            }
+          });
+        }
 
         document.getElementById('parse-preview').style.display = 'block';
         document.getElementById('parse-preview').innerHTML = `
           <div class="parse-stats">
             <div class="stat-row"><span class="label">Rows</span><span class="value">${s.aggregatedRows}</span></div>
-            <div class="stat-row"><span class="label">Date(s)</span><span class="value">${s.startDate}${s.startDate !== s.endDate ? ' → ' + s.endDate : ''}</span></div>
+            <div class="stat-row"><span class="label">Date(s)</span><span class="value">${escapeHtml(s.startDate || '—')}${s.startDate !== s.endDate ? ' → ' + escapeHtml(s.endDate || '—') : ''}</span></div>
             <div class="stat-row"><span class="label">Items</span><span class="value">${s.uniqueItems} menu items</span></div>
             <div class="stat-row"><span class="label">Sales</span><span class="value">$${s.totalSales.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
           </div>
@@ -129,6 +182,14 @@
         document.getElementById('upload-btn').disabled = false;
         setStatus('✅ Ready to upload', 'success');
       } catch (err) {
+        await trackMonitoring('csv_validation_failure', {
+          flow: 'daily_sales_upload',
+          metadata: {
+            page: 'upload',
+            parse_exception: true,
+            error_message: err && err.message ? err.message : 'CSV parse failed'
+          }
+        });
         setStatus('❌ ' + err.message, 'error');
       }
     }
@@ -155,6 +216,16 @@
         }
 
         setStatus(`🎉 Done! ${result.totalProcessed} rows for ${dates.join(', ')}. Inventory updated.`, 'success');
+        await trackMonitoring('csv_upload_completed', {
+          flow: 'daily_sales_upload',
+          metadata: {
+            page: 'upload',
+            processed_rows: result.totalProcessed,
+            menu_items_created: result.totalItemsCreated,
+            business_dates: dates,
+            aggregated_rows: parsedData.stats.aggregatedRows
+          }
+        });
         showToast('Upload complete!', 'success');
         loadRecentDays();
       } catch (err) {
@@ -164,27 +235,32 @@
     });
 
     async function loadRecentDays() {
+      const tbody = document.getElementById('recent-tbody');
       const { data, error } = await sb
         .from('sales_line_items')
         .select('business_date, qty, net_sales, menu_item_id');
-      if (error) return;
 
-      const byDate = {};
-      data.forEach(r => {
-        if (!byDate[r.business_date]) byDate[r.business_date] = { date: r.business_date, qty: 0, sales: 0, items: new Set() };
-        byDate[r.business_date].qty += r.qty;
-        byDate[r.business_date].sales += r.net_sales;
-        byDate[r.business_date].items.add(r.menu_item_id);
+      if (error) {
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--red);padding:24px;">Unable to load stored sales days.</td></tr>';
+        return;
+      }
+
+      const sorted = buildRecentSalesDays(data || [], {
+        limit: 10,
+        maxDate: new Date().toISOString().split('T')[0]
       });
 
-      const sorted = Object.values(byDate).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 10);
+      if (sorted.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:24px;">No sales days stored yet. Upload a CSV to populate the database.</td></tr>';
+        return;
+      }
 
-      document.getElementById('recent-tbody').innerHTML = sorted.map(d => `
+      tbody.innerHTML = sorted.map(d => `
         <tr>
-          <td class="mono" style="color:var(--text-primary)">${d.date}</td>
+          <td class="mono" style="color:var(--text-primary)">${escapeHtml(d.date)}</td>
           <td class="mono">${Math.round(d.qty)}</td>
           <td class="mono" style="color:var(--accent)">$${Math.round(d.sales).toLocaleString()}</td>
-          <td class="mono">${d.items.size}</td>
+          <td class="mono">${d.itemCount}</td>
         </tr>
       `).join('');
     }

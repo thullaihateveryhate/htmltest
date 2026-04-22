@@ -38,3 +38,7 @@ window.__SUPABASE_ANON_KEY = '${key}';
 const envOutPath = path.join(__dirname, '..', 'Frontend', 'js', 'env.js');
 fs.writeFileSync(envOutPath, envContent);
 console.log('✅ Frontend/js/env.js generated from public Supabase config');
+
+const kioskEnvOutPath = path.join(__dirname, '..', 'kiosk', 'env.js');
+fs.writeFileSync(kioskEnvOutPath, envContent);
+console.log('✅ kiosk/env.js generated from public Supabase config');

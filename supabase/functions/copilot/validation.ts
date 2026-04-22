@@ -11,6 +11,20 @@ const VALID_MODES = new Set<CopilotMode>(["chat", "pricing_insights"]);
 const MAX_MESSAGE_LENGTH = 4000;
 const MAX_CONTEXT_CHARS = 20000;
 const MAX_CONTEXT_DEPTH = 8;
+const CONTROL_MESSAGE_RE = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/g;
+const MULTISPACE_RE = /\s+/g;
+
+function normalizeMessageText(value: string): string {
+  return value.normalize("NFKC").replace(CONTROL_MESSAGE_RE, "").trim();
+}
+
+function normalizeShortText(value: string): string {
+  return value
+    .normalize("NFKC")
+    .replace(CONTROL_MESSAGE_RE, " ")
+    .replace(MULTISPACE_RE, " ")
+    .trim();
+}
 
 function assertJsonSafe(value: unknown, depth = 0): void {
   if (depth > MAX_CONTEXT_DEPTH) {
@@ -93,7 +107,7 @@ function validateOptionalShortString(
     throw new AppError("invalid_pending_action", `${fieldName} must be a string when provided.`, 400);
   }
 
-  const trimmed = value.trim();
+  const trimmed = normalizeShortText(value);
   if (!trimmed) {
     throw new AppError("invalid_pending_action", `${fieldName} cannot be empty.`, 400);
   }
@@ -168,7 +182,7 @@ export async function parseAndValidateRequest(request: Request): Promise<Copilot
     throw new AppError("invalid_message", "message must be a string.", 400);
   }
 
-  const trimmedMessage = message.trim();
+  const trimmedMessage = normalizeMessageText(message);
   if (!trimmedMessage) {
     throw new AppError("empty_message", "message is required.", 400);
   }

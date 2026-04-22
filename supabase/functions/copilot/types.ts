@@ -75,6 +75,7 @@ export interface OpenAIRuntimeEnv {
   model: string;
   supabaseUrl: string;
   supabaseAnonKey: string;
+  supabaseServiceRoleKey?: string | null;
   actionSecret: string | null;
 }
 
