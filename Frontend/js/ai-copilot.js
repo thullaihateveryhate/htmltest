@@ -10,6 +10,66 @@
   let isOpen = false;
   let isLoading = false;
   let messages = [];
+  let pendingAction = null;
+  let pendingActionCardId = null;
+
+  function getAIClient() {
+    if (!window.stockdAIClient || typeof window.stockdAIClient.sendChatMessage !== 'function') {
+      throw new Error('Copilot client is not available on this page.');
+    }
+
+    return window.stockdAIClient;
+  }
+
+  function truncateText(text, maxLength = 600) {
+    if (typeof text !== 'string') return '';
+    return text.length > maxLength ? text.slice(0, maxLength) + '…' : text;
+  }
+
+  function buildRequestContext() {
+    const fileName = window.location.pathname.split('/').pop() || '';
+    const page = fileName.replace(/\.html$/i, '') || 'unknown';
+
+    return {
+      source: 'copilot_panel',
+      page,
+      page_title: document.title || '',
+      pathname: window.location.pathname,
+      conversation: messages.slice(-8).map(msg => ({
+        role: msg.role,
+        text: truncateText(msg.text)
+      }))
+    };
+  }
+
+  function setComposerDisabled(disabled) {
+    const input = document.getElementById('ai-input');
+    const sendButton = document.getElementById('ai-send');
+
+    if (input) input.disabled = disabled;
+    if (sendButton) sendButton.disabled = disabled;
+  }
+
+  function setPendingActionButtonsDisabled(disabled) {
+    if (!pendingActionCardId) return;
+
+    const card = document.getElementById(pendingActionCardId);
+    if (!card) return;
+
+    const buttons = card.querySelectorAll('button');
+    buttons.forEach((button) => {
+      button.disabled = disabled;
+    });
+  }
+
+  function escapeHtml(text) {
+    return String(text)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
 
   // ─── DOM Creation ────────────────────────────────────────────
 
@@ -22,7 +82,7 @@
         <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"/>
       </svg>
     `;
-    trigger.title = 'Open AI Assistant';
+    trigger.title = 'Open Copilot';
     trigger.onclick = togglePanel;
 
     // Only show floating button on Dashboard
@@ -111,10 +171,157 @@
     }
   }
 
+  function removePendingActionCard() {
+    if (!pendingActionCardId) return;
+
+    const card = document.getElementById(pendingActionCardId);
+    if (card) card.remove();
+    pendingActionCardId = null;
+  }
+
+  function clearPendingAction(options) {
+    const settings = options || {};
+
+    if (settings.message) {
+      addMessage('ai', settings.message);
+      messages.push({ role: 'assistant', text: settings.message });
+    }
+
+    pendingAction = null;
+    removePendingActionCard();
+  }
+
+  function buildConfirmationErrorMessage(error) {
+    const code = error && typeof error.code === 'string' ? error.code : '';
+    const message = error && typeof error.message === 'string' && error.message.trim()
+      ? error.message.trim()
+      : 'Unable to confirm that action right now.';
+
+    if (code === 'pending_action_expired') {
+      return `${message} No changes were made. Ask Copilot again if you still want to apply it.`;
+    }
+
+    if (
+      code === 'invalid_pending_action' ||
+      code === 'invalid_pending_action_signature' ||
+      code === 'invalid_pending_action_timestamps' ||
+      code === 'unexpected_pending_action' ||
+      code === 'unsupported_pending_action'
+    ) {
+      return `${message} No changes were made. Please ask Copilot to prepare the action again.`;
+    }
+
+    if (code === 'missing_action_secret') {
+      return `${message} No changes were made.`;
+    }
+
+    return `${message} No changes were made.`;
+  }
+
+  function showPendingActionPrompt(action) {
+    const summary = action && typeof action.summary === 'string' && action.summary.trim()
+      ? action.summary.trim()
+      : 'Confirm this inventory update before continuing.';
+
+    pendingAction = action;
+    removePendingActionCard();
+
+    const container = document.getElementById('ai-messages');
+    const id = 'pending-' + Date.now();
+    pendingActionCardId = id;
+
+    const card = document.createElement('div');
+    card.id = id;
+    card.className = 'ai-message ai-message-ai';
+    card.innerHTML = `
+      <div class="ai-message-content">
+        <div style="border:1px solid rgba(255,255,255,0.12); border-radius:14px; padding:14px; background:rgba(255,255,255,0.04);">
+          <div style="font-size:12px; letter-spacing:0.08em; text-transform:uppercase; color:#FBBF24; font-weight:700; margin-bottom:6px;">
+            Confirmation Required
+          </div>
+          <div style="font-size:14px; line-height:1.45; margin-bottom:12px;">${escapeHtml(summary)}</div>
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <button type="button" data-action="confirm" style="background:#10B981; color:#04130D; border:none; border-radius:10px; padding:8px 12px; font-weight:700; cursor:pointer;">
+              Confirm
+            </button>
+            <button type="button" data-action="cancel" style="background:transparent; color:#E5E7EB; border:1px solid rgba(255,255,255,0.16); border-radius:10px; padding:8px 12px; font-weight:600; cursor:pointer;">
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+
+    container.appendChild(card);
+    container.scrollTop = container.scrollHeight;
+
+    const confirmButton = card.querySelector('button[data-action="confirm"]');
+    const cancelButton = card.querySelector('button[data-action="cancel"]');
+
+    if (confirmButton) {
+      confirmButton.addEventListener('click', confirmPendingInventoryAction);
+    }
+
+    if (cancelButton) {
+      cancelButton.addEventListener('click', cancelPendingInventoryAction);
+    }
+  }
+
+  async function confirmPendingInventoryAction() {
+    if (!pendingAction || isLoading) return;
+
+    isLoading = true;
+    setComposerDisabled(true);
+    setPendingActionButtonsDisabled(true);
+
+    const loadingId = addMessage('ai', '', true);
+    const requestContext = buildRequestContext();
+
+    try {
+      const response = await getAIClient().confirmPendingAction(pendingAction, {
+        ...requestContext,
+        source: 'copilot_panel_confirmation',
+        pending_action_tool: pendingAction.tool_name || null
+      });
+
+      removeMessage(loadingId);
+      removePendingActionCard();
+      const replyText = response.reply || 'Done.';
+      addMessage('ai', replyText);
+      messages.push({ role: 'assistant', text: replyText });
+      pendingAction = null;
+    } catch (error) {
+      removeMessage(loadingId);
+      const errorMessage = buildConfirmationErrorMessage(error);
+      pendingAction = null;
+      removePendingActionCard();
+      addMessage('ai', `⚠️ ${errorMessage}`, false, true);
+    } finally {
+      isLoading = false;
+      setComposerDisabled(false);
+
+      const input = document.getElementById('ai-input');
+      if (input) input.focus();
+    }
+  }
+
+  function cancelPendingInventoryAction() {
+    if (!pendingAction) return;
+
+    clearPendingAction({
+      message: "Okay, I won't make that change."
+    });
+  }
+
   // ─── Send Message ────────────────────────────────────────────
 
   async function sendMessage(text) {
-    if (!text.trim() || isLoading) return;
+    const trimmedText = text.trim();
+    if (!trimmedText || isLoading) return;
+
+    if (pendingAction) {
+      clearPendingAction();
+    }
 
     const input = document.getElementById('ai-input');
     input.value = '';
@@ -124,39 +331,46 @@
     if (welcome) welcome.remove();
 
     // Add user message
-    addMessage('user', text);
+    addMessage('user', trimmedText);
 
     // Show loading
     isLoading = true;
+    setComposerDisabled(true);
     const loadingId = addMessage('ai', '', true);
+    const requestContext = buildRequestContext();
 
     try {
-      // Check if Gemini is configured
-      if (typeof GEMINI_API_KEY === 'undefined' || GEMINI_API_KEY === 'YOUR_GEMINI_API_KEY_HERE') {
-        throw new Error('Please add your Gemini API key to config.js');
-      }
-
-      if (!geminiChat) {
-        throw new Error('AI chat not initialized');
-      }
-
-      const response = await geminiChat.sendMessage(text);
+      const response = await getAIClient().sendChatMessage(trimmedText, requestContext);
+      const replyText = response.reply || 'I could not generate a reply.';
 
       // Remove loading message
       removeMessage(loadingId);
 
       // Add AI response
-      if (response.error) {
-        addMessage('ai', `⚠️ ${response.text}`, false, true);
-      } else {
-        addMessage('ai', response.text);
+      addMessage('ai', replyText);
+
+      messages.push({ role: 'user', text: trimmedText });
+      messages.push({ role: 'assistant', text: replyText });
+
+      if (
+        response &&
+        response.data &&
+        response.data.requires_confirmation === true &&
+        response.data.pending_action
+      ) {
+        showPendingActionPrompt(response.data.pending_action);
       }
     } catch (error) {
       removeMessage(loadingId);
-      addMessage('ai', `⚠️ ${error.message}`, false, true);
+      const errorMessage = error && typeof error.message === 'string' && error.message.trim()
+        ? error.message.trim()
+        : 'Copilot is unavailable right now. Please try again.';
+      addMessage('ai', `⚠️ ${errorMessage}`, false, true);
+    } finally {
+      isLoading = false;
+      setComposerDisabled(false);
+      if (input) input.focus();
     }
-
-    isLoading = false;
   }
 
   function addMessage(role, text, isLoading = false, isError = false) {
@@ -193,16 +407,42 @@
   function formatMessage(text) {
     if (!text) return '';
 
-    // Convert markdown-like formatting
-    return text
-      // Bold
-      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-      // Bullet points
-      .replace(/^[•\-\*]\s+(.*)$/gm, '<li>$1</li>')
-      // Wrap consecutive li in ul
-      .replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>')
-      // Line breaks
-      .replace(/\n/g, '<br>');
+    const escaped = escapeHtml(text);
+    const withBold = escaped.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    const lines = withBold.split('\n');
+
+    let html = '';
+    let inList = false;
+
+    lines.forEach(line => {
+      const bulletMatch = line.match(/^\s*[•\-\*]\s+(.*)$/);
+
+      if (bulletMatch) {
+        if (!inList) {
+          html += '<ul>';
+          inList = true;
+        }
+        html += `<li>${bulletMatch[1]}</li>`;
+        return;
+      }
+
+      if (inList) {
+        html += '</ul>';
+        inList = false;
+      }
+
+      if (line.trim()) {
+        html += `<div>${line}</div>`;
+      } else {
+        html += '<br>';
+      }
+    });
+
+    if (inList) {
+      html += '</ul>';
+    }
+
+    return html;
   }
 
   // ─── Global Functions ────────────────────────────────────────

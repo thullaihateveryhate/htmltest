@@ -99,7 +99,7 @@
         Stockd</div>
       <div
         style="color:#86868B; font-size:12px; margin:0 auto; line-height:1.4; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
-        Smart inventory management for modern kitchens. Powered using Gemini & Supabase.
+        Smart inventory management for modern kitchens. Powered using Stockd Copilot & Supabase.
       </div>
       <div
         style="color:#86868B; font-size:12px; margin-top:4px; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
@@ -119,8 +119,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="../js/env.js"></script>
   <script src="../js/supabase-client.js"></script>
-  <script src="../js/config.js"></script>
-  <script src="../js/gemini-client.js"></script>
+  <script src="../js/ai-client.js"></script>
   <script src="../js/ai-copilot.js"></script>
   <script src="../js/animated-counter.js"></script>
   <script>
@@ -197,13 +196,28 @@
 
         // Generate recommendations
         let recommendations = null;
+        let recommendationState = { fallback: false, reason: '', source: 'ai' };
 
         // Try AI generation first
         try {
           renderSkeletonLoading(); // Show skeleton state while AI thinks
-          recommendations = await generateAIPricingInsights(itemPerformance);
+          const aiResult = await generateCopilotPricingInsights(itemPerformance, { startDate, endDate });
+          recommendations = aiResult.recommendations;
+
+          if (!recommendations || recommendations.length === 0) {
+            recommendationState = {
+              fallback: true,
+              source: 'fallback',
+              reason: aiResult.reason || 'Stockd Copilot did not return usable pricing recommendations.'
+            };
+          }
         } catch (err) {
-          console.warn('AI pricing generation failed, falling back to rules:', err);
+          console.warn('Pricing insights request failed, falling back to rules:', err);
+          recommendationState = {
+            fallback: true,
+            source: 'fallback',
+            reason: err && err.message ? err.message : 'Stockd Copilot is unavailable right now.'
+          };
         }
 
         // Fallback to rule-based if AI fails or returns empty
@@ -213,7 +227,7 @@
         }
 
         // Render
-        renderPricingRecommendations(recommendations.slice(0, 5));
+        renderPricingRecommendations(recommendations.slice(0, 5), recommendationState);
 
       } catch (error) {
         console.error('Error fetching pricing recommendations:', error);
@@ -367,7 +381,16 @@
       return recommendations;
     }
 
-    function renderPricingRecommendations(recommendations) {
+    function escapeHtml(value) {
+      return String(value == null ? '' : value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function renderPricingRecommendations(recommendations, options = {}) {
       const container = document.getElementById('pricing-recommendations');
 
       if (recommendations.length === 0) {
@@ -380,6 +403,18 @@
         `;
         return;
       }
+
+      const fallbackBanner = options.fallback ? `
+        <div style="background:#1F2937; border:1px solid #374151; border-radius:12px; padding:14px 16px; margin-bottom:16px; display:flex; gap:12px;">
+          <div style="font-size:18px;">ℹ️</div>
+          <div>
+            <div style="font-weight:700; font-size:13px; color:#E5E7EB; margin-bottom:4px;">USING LOCAL FALLBACK</div>
+            <div style="font-size:12px; color:#D1D5DB; line-height:1.4;">
+              ${escapeHtml(options.reason || 'Stockd Copilot was unavailable, so these recommendations were generated with local pricing rules.')}
+            </div>
+          </div>
+        </div>
+      ` : '';
 
       const cautionBanner = `
         <div style="background:#FEF3C7; border:1px solid #F59E0B; border-radius:12px; padding:16px; margin-bottom:20px; display:flex; gap:12px;">
@@ -397,9 +432,10 @@
         const actionColors = {
           increase: { bg: '#064E3B', text: '#D1FAE5', border: '#10B981' }, // Darker green bg for dark mode
           decrease: { bg: '#7F1D1D', text: '#FEE2E2', border: '#EF4444' }, // Darker red bg for dark mode
-          hold: { bg: '#374151', text: '#F3F4F6', border: '#9CA3AF' }
+          hold: { bg: '#374151', text: '#F3F4F6', border: '#9CA3AF' },
+          investigate: { bg: '#312E81', text: '#E0E7FF', border: '#818CF8' }
         };
-        const colors = actionColors[rec.action];
+        const colors = actionColors[rec.action] || actionColors.hold;
         const riskColor = rec.risk === 'low' ? '#10B981' : rec.risk === 'medium' ? '#F59E0B' : '#EF4444';
 
         const categoryEmojis = {
@@ -407,16 +443,21 @@
           'Appetizer': '🥟', 'Dessert': '🍰', 'Beverage': '🥤', 'Other': '🍽️'
         };
         const emoji = categoryEmojis[rec.category] || '🍽️';
+        const actionLabel = rec.action === 'hold'
+          ? 'Hold'
+          : rec.action === 'investigate'
+            ? 'Review'
+            : (rec.percentChange > 0 ? '+' : '') + rec.percentChange + '%';
 
         return `
           <div style="background:#2C2C2E; border-radius:10px; padding:16px; margin-bottom:12px; border-left:4px solid ${colors.border};">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
               <div style="display:flex; align-items:center; gap:8px;">
                 <span style="font-size:18px;">${emoji}</span>
-                <span style="font-weight:600; font-size:15px; color:#FFF;">${rec.itemName}</span>
+                <span style="font-weight:600; font-size:15px; color:#FFF;">${escapeHtml(rec.itemName)}</span>
               </div>
               <div style="background:${colors.bg}; color:${colors.text}; padding:4px 10px; border-radius:6px; font-size:12px; font-weight:600;">
-                ${rec.actionIcon} ${rec.action === 'hold' ? 'Hold' : (rec.percentChange > 0 ? '+' : '') + rec.percentChange + '%'}
+                ${rec.actionIcon} ${actionLabel}
               </div>
             </div>
             
@@ -428,7 +469,7 @@
               <span style="font-weight:700; color:#FFF;">$${rec.suggestedPrice.toFixed(2)}</span>
             </div>
             
-            <div style="font-size:13px; color:#D1D5DB; margin-bottom:10px; line-height:1.4;">${rec.reason}</div>
+            <div style="font-size:13px; color:#D1D5DB; margin-bottom:10px; line-height:1.4;">${escapeHtml(rec.reason)}</div>
             
             <div style="display:flex; gap:12px; font-size:12px; color:#9CA3AF; margin-bottom:10px;">
               <span>${Math.round(rec.metrics.unitsSold)} sold</span>
@@ -445,6 +486,7 @@
       }).join('');
 
       container.innerHTML = `
+        ${fallbackBanner}
         ${cautionBanner}
         <div style="font-size:12px; color:#9CA3AF; margin-bottom:12px; text-transform:uppercase; letter-spacing:0.5px;">Based on 7-day sales analysis</div>
         <div style="flex:1; overflow-y: auto; padding-right: 4px; min-height:0;">
@@ -480,7 +522,7 @@
         </div>
         <div style="margin-bottom:12px; display:flex; align-items:center; gap:8px;">
            <div class="spinner" style="border:2px solid #3A3A3C; border-top:2px solid #007AFF; border-radius:50%; width:14px; height:14px; animation:spin 1s linear infinite;"></div>
-           <span style="font-size:12px; color:#007AFF;">Consulting Gemini AI...</span>
+           <span style="font-size:12px; color:#007AFF;">Consulting Stockd Copilot...</span>
         </div>
         <style>
           @keyframes pulse { 0% { opacity: 0.6; } 50% { opacity: 0.3; } 100% { opacity: 0.6; } }
@@ -500,14 +542,18 @@
       }
     }
 
-    async function generateAIPricingInsights(itemPerformance) {
-      if (typeof GeminiChat === 'undefined') return null;
+    async function generateCopilotPricingInsights(itemPerformance, windowRange) {
+      if (!window.stockdAIClient || typeof window.stockdAIClient.getPricingInsights !== 'function') {
+        throw new Error('Pricing insights client is unavailable.');
+      }
 
-      const ai = new GeminiChat();
-
-      // Prepare concise data for AI
       const validItems = itemPerformance.filter(i => i.totalQuantity > 0);
-      if (validItems.length === 0) return null;
+      if (validItems.length === 0) {
+        return {
+          recommendations: [],
+          reason: 'Not enough sales data was available for AI pricing analysis.'
+        };
+      }
 
       const summaryData = validItems.map(i => ({
         id: i.id,
@@ -515,67 +561,96 @@
         category: i.category,
         price: Number(i.currentPrice.toFixed(2)),
         qty: i.totalQuantity,
-        rev: Math.round(i.totalRevenue)
-      })).sort((a, b) => b.rev - a.rev).slice(0, 15); // Send top 15 items to save tokens
+        revenue: Math.round(i.totalRevenue),
+        orders: i.orderCount
+      })).sort((a, b) => b.revenue - a.revenue).slice(0, 15); // Send top 15 items to save tokens
 
-      const prompt = `
-        Analyze these menu items (last 7 days sales) and recommend pricing changes to maximize revenue.
-        
-        Return a JSON array ONLY (no markdown, no explanations outside JSON) with objects:
-        {
-          "itemId": "id from data",
-          "action": "increase" | "decrease" | "hold",
-          "newPrice": number,
-          "reason": "short explanation (max 10 words)"
+      const context = {
+        analysis_window: {
+          start_date: windowRange.startDate,
+          end_date: windowRange.endDate
+        },
+        item_count: summaryData.length,
+        items: summaryData,
+        totals: {
+          revenue: Number(validItems.reduce((sum, item) => sum + item.totalRevenue, 0).toFixed(2)),
+          quantity: validItems.reduce((sum, item) => sum + item.totalQuantity, 0),
+          average_price: Number((validItems.reduce((sum, item) => sum + item.currentPrice, 0) / validItems.length).toFixed(2))
         }
-        
-        Rules:
-        - Suggest "increase" (3-10%) for high volume/revenue items.
-        - Suggest "decrease" (5-15%) for low volume items.
-        - Suggest "hold" for stable items.
-        - Be aggressive but realistic.
-        
-        Data: ${JSON.stringify(summaryData)}
-      `;
+      };
 
-      try {
-        const response = await ai.sendMessage(prompt);
-        const text = (response.text || '').replace(/```json/g, '').replace(/```/g, '').trim();
+      const response = await window.stockdAIClient.getPricingInsights(
+        'Analyze pricing opportunities for these menu items over the last 7 days and recommend concise, realistic price moves.',
+        context
+      );
 
-        const aiRecs = JSON.parse(text);
-        if (!Array.isArray(aiRecs)) return null;
+      const recommendations = mapPricingInsightsResponse(response, itemPerformance);
+      return {
+        recommendations,
+        reason: recommendations.length > 0
+          ? ''
+          : (response.reply || 'Stockd Copilot returned an incomplete pricing analysis.'),
+        reply: response.reply || '',
+        data: response.data || null
+      };
+    }
 
-        return aiRecs.map(rec => {
-          const original = itemPerformance.find(i => i.id === rec.itemId);
-          if (!original) return null;
+    function mapPricingInsightsResponse(response, itemPerformance) {
+      const aiRecommendations = response && response.data && Array.isArray(response.data.recommendations)
+        ? response.data.recommendations
+        : [];
 
-          const priceChange = rec.newPrice - original.currentPrice;
-          const percentChange = original.currentPrice > 0 ? (priceChange / original.currentPrice) * 100 : 0;
-
-          return {
-            itemId: original.id,
-            itemName: original.name,
-            category: original.category,
-            currentPrice: original.currentPrice,
-            suggestedPrice: rec.newPrice,
-            priceChange: Number(priceChange.toFixed(2)),
-            percentChange: Math.round(percentChange),
-            action: rec.action,
-            actionIcon: rec.action === 'increase' ? '↗️' : rec.action === 'decrease' ? '↘️' : '=',
-            reason: '🤖 ' + rec.reason,
-            confidence: 'high',
-            risk: Math.abs(percentChange) > 15 ? 'high' : 'low',
-            metrics: {
-              unitsSold: original.totalQuantity,
-              revenue: original.totalRevenue,
-              orders: original.orderCount
-            }
-          };
-        }).filter(Boolean);
-      } catch (e) {
-        console.error('Failed to parse AI response:', e);
-        return null;
+      if (aiRecommendations.length === 0) {
+        return [];
       }
+
+      const itemsByName = new Map(
+        itemPerformance.map(item => [String(item.name || '').trim().toLowerCase(), item])
+      );
+
+      return aiRecommendations.map(rec => {
+        const recName = typeof rec.item_name === 'string' ? rec.item_name.trim() : '';
+        if (!recName) return null;
+
+        const original = itemsByName.get(recName.toLowerCase());
+        if (!original) return null;
+
+        const suggestedPrice = typeof rec.suggested_price === 'number' && Number.isFinite(rec.suggested_price)
+          ? Number(rec.suggested_price.toFixed(2))
+          : null;
+
+        if (suggestedPrice === null) return null;
+
+        const rawAction = typeof rec.action === 'string' ? rec.action : 'hold';
+        const action = ['increase', 'decrease', 'hold', 'investigate'].includes(rawAction) ? rawAction : 'hold';
+        const priceChange = Number((suggestedPrice - original.currentPrice).toFixed(2));
+        const computedPercentChange = original.currentPrice > 0
+          ? Math.round((priceChange / original.currentPrice) * 100)
+          : 0;
+        const reportedPercent = typeof rec.price_change_percent === 'number' && Number.isFinite(rec.price_change_percent)
+          ? Math.round(rec.price_change_percent)
+          : computedPercentChange;
+
+        return {
+          itemId: original.id,
+          itemName: original.name,
+          category: original.category,
+          currentPrice: original.currentPrice,
+          suggestedPrice,
+          priceChange,
+          percentChange: reportedPercent,
+          action,
+          actionIcon: action === 'increase' ? '↗️' : action === 'decrease' ? '↘️' : action === 'investigate' ? '🔎' : '=',
+          reason: 'AI: ' + (typeof rec.reason === 'string' ? rec.reason : 'Review pricing opportunity'),
+          confidence: ['low', 'medium', 'high'].includes(rec.confidence) ? rec.confidence : 'medium',
+          risk: ['low', 'medium', 'high'].includes(rec.risk) ? rec.risk : (Math.abs(reportedPercent) > 15 ? 'high' : 'medium'),
+          metrics: {
+            unitsSold: original.totalQuantity,
+            revenue: original.totalRevenue,
+            orders: original.orderCount
+          }
+        };
+      }).filter(Boolean);
     }
 
     async function loadTopSellers() {

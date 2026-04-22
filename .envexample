@@ -1,10 +1,14 @@
+# Public frontend runtime config (generated into Frontend/js/env.js)
 SUPABASE_URL=
 SUPABASE_ANON_KEY=
+
+# Server-side secrets (Node scripts / Supabase Edge Function)
 SUPABASE_SERVICE_KEY=
+OPENAI_API_KEY=
+OPENAI_MODEL=gpt-4o-mini
 
-# Gemini API Key (used in Frontend)
-GEMINI_API_KEY=
-GEMINI_MODEL=gemini-2.5-flash
+# Dedicated signing secret for Copilot pending write confirmations
+COPILOT_ACTION_SECRET=
 
-# ElevenLabs Text-to-Speech Configuration
+# Optional server-side integrations
 ELEVENLABS_API_KEY=

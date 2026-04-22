@@ -5,9 +5,11 @@
   "main": "index.js",
   "scripts": {
     "test": "jest --runInBand --verbose",
+    "test:copilot": "jest tests/copilot --runInBand --verbose",
     "test:watch": "jest --runInBand --watch",
-    "build": "npm run config",
-    "config": "node scripts/generate-config.js",
+    "build": "npm run config:public",
+    "config": "npm run config:public",
+    "config:public": "node scripts/generate-config.js",
     "start": "npx serve Frontend",
     "start:backend": "node Backend/server.js",
     "start:kiosk": "npx serve kiosk -l 3000"
@@ -35,6 +37,7 @@
   },
   "devDependencies": {
     "jest": "^30.2.0",
-    "supabase": "^2.76.3"
+    "supabase": "^2.76.3",
+    "typescript": "^5.9.3"
   }
 }
